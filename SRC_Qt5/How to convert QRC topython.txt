@@ -1,0 +1,11 @@
+[pyrcc5 실행이 가능한 경우]
+1. 터미널을 실행한다.
+2. 아래의 커맨드를 입력한다
+pyrcc5 file.qrc -o file file_rc.py
+ex) pyrcc5 AWRL6432_INCAB_UI_RESOURCE_rc.qrc -o AWRL6432_INCAB_UI_RESOURCE_rc.py
+
+[pyrcc5 실행 오류가 발생하는 경우]
+1. 파이썬의 Python Debug Console 창에서 qrc 파일이 위치한 경로까지 이동한다
+cd (qrc 파일이 위치한 파일 경로)
+2. python -m PyQt5.pyrcc_main qrc파일명 -o 파이썬파일명_rc.py
+ex) python -m PyQt5.pyrcc_main img_source.qrc -o img_source_rc.py

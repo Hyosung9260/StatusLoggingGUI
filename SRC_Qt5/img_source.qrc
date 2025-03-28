@@ -1,0 +1,17 @@
+<RCC>
+  <qresource prefix="logo">
+    <file>UI_IMG/AU_logo.png</file>
+  </qresource>
+  <qresource prefix="btn">
+    <file>UI_IMG/off_click.png</file>
+    <file>UI_IMG/off_def.png</file>
+    <file>UI_IMG/off_hov.png</file>
+    <file>UI_IMG/on_click.png</file>
+    <file>UI_IMG/on_def.png</file>
+    <file>UI_IMG/on_hov.png</file>
+  </qresource>
+  <qresource prefix="etc">
+    <file>UI_IMG/folder_icon.png</file>
+    <file>UI_IMG/x_icon.png</file>
+  </qresource>
+</RCC>

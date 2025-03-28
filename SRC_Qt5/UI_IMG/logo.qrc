@@ -1,0 +1,17 @@
+<RCC>
+  <qresource prefix="logo">
+    <file>AU_logo.png</file>
+  </qresource>
+  <qresource prefix="icon">
+    <file>x_icon.png</file>
+    <file>folder_icon.png</file>
+  </qresource>
+  <qresource prefix="toggle">
+    <file>off_click.png</file>
+    <file>off_def.png</file>
+    <file>off_hov.png</file>
+    <file>on_click.png</file>
+    <file>on_def.png</file>
+    <file>on_hov.png</file>
+  </qresource>
+</RCC>

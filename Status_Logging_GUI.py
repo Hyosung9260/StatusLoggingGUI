@@ -4,20 +4,22 @@ import time
 import img_source_rc
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtCore import QTimer, QTime, Qt
-from PyQt5.QtGui import QFont, QColor
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QFileDialog
+from PyQt5.QtGui import QFont
 
+version = "version 0.0.2"
 '''
-0.0.1 :> GUI 초기 구성 완료
+# TODO
+1. System Log 자동 저장 기능 추가 예정
+2. CAN Log 자동 저장 기능 추가 예정
 '''
-version = "version 0.0.1"
 
 # Style Sheet Preset
 color_disable = "background-color: rgb(156, 156, 156);\ncolor: rgb(255, 255, 255);\nborder-radius: 6px;"
 color_enable = "background-color: rgb(170, 0, 0);\ncolor: rgb(255, 255, 255);\nborder-radius: 6px;"
 color_lock = "background-color: rgb(90, 90, 90);\ncolor: rgb(255, 255, 255);\nborder-radius: 6px;"
 
-class MyApp(QtWidgets.QMainWindow):
+class StatusGUI(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         uic.loadUi("Status_Logging_GUI.ui", self)   # Load GUI file
@@ -44,6 +46,10 @@ class MyApp(QtWidgets.QMainWindow):
         4. 동작 완료 후
 
         '''
+        date = datetime.datetime.now()
+        select_date = date.strftime("%y.%m.%d")
+        select_time = QTime.currentTime().toString("hh.mm.ss")
+
         # Initialize flag
         self.flag_start = False
         self.flag_unlock = False
@@ -63,17 +69,13 @@ class MyApp(QtWidgets.QMainWindow):
         self.btn_start.clicked.connect(self.func_start)
         self.btn_stop.clicked.connect(self.func_stop)
         self.btn_unlock.clicked.connect(self.func_unlock)
-        # self.btn_device1.clicked.connect(self.)
-        # self.btn_device2.clicked.connect(self.)
-        # self.btn_device3.clicked.connect(self.)
+        self.line_logFileName.setText(self.cmb_modeSelection.currentText() + f"_{select_date}_{select_time}")
         self.lab_version.setText(version)
+        self.txtEdit_sysLog.setReadOnly(True)   # Read only
+        self.txtEdit_canLog.setReadOnly(True)   # Read only
         # self.progressBar
 
-        for self.group_canConnect
-
-        # Operation related buttons/labels
-        # self.lab_current_dev1
-        # self.lab_temp_dev1
+        # for self.group_canConnect
     
     def update_operation_display(self):
         hours = self.operation_timer // 3600
@@ -93,6 +95,34 @@ class MyApp(QtWidgets.QMainWindow):
         current_time = QTime.currentTime().toString("hh:mm")
         self.lab_crntTime.setText(current_time)
     
+    def print_log(self, category, message):
+        # Print log to the textEdit
+        date = datetime.datetime.now()
+        logging_date = date.strftime("%Y.%m.%d")
+        logging_time = QTime.currentTime().toString("hh:mm:ss")
+
+        # Limit the number of lines in the textEdit to avoid memory overflow
+        max_log_lines = 1000
+
+        # category 0 : System log 
+        if category == 0:
+            self.txtEdit_sysLog.append(f"[{logging_date}_{logging_time}] {message}")
+            self.txtEdit_sysLog.ensureCursorVisible()     # Automatically scroll to the bottom of the textEdit
+            if self.txtEdit_sysLog.document().blockCount() > max_log_lines:
+                cursor = self.txtEdit_sysLog.textCursor()
+                cursor.movePosition(cursor.Start)
+                cursor.select(cursor.BlockUnderCursor)
+                cursor.removeSelectedText()
+        # category 1 : CAN log
+        elif category == 1:
+            self.txtEdit_canLog.append(f"[{logging_date}_{logging_time}] {message}")
+            self.txtEdit_canLog.ensureCursorVisible()     # Automatically scroll to the bottom of the textEdit
+            if self.txtEdit_canLog.document().blockCount() > max_log_lines:
+                cursor = self.txtEdit_canLog.textCursor()
+                cursor.movePosition(cursor.Start)
+                cursor.select(cursor.BlockUnderCursor)
+                cursor.removeSelectedText()
+
     def func_modeSelection(self):
         date = datetime.datetime.now()
         select_date = date.strftime("%y.%m.%d")
@@ -103,7 +133,10 @@ class MyApp(QtWidgets.QMainWindow):
         self.line_logFileName.setText("")
 
     def func_folder(self):
-        pass
+        folder_path = QFileDialog.getExistingDirectory(self, "폴더 선택")
+        # Only executed when user select path
+        if folder_path:
+            self.line_logFilePath.setText(folder_path)
 
     def func_start(self):
         # When clicked start button, poped up a messageBox to confirm
@@ -121,7 +154,9 @@ class MyApp(QtWidgets.QMainWindow):
             self.lab_programStatus.setFont(QFont("한컴 고딕", 16, QFont.Bold))
             self.lab_programStatus.setStyleSheet("color: rgb(170, 0, 0);")
             self.lab_programStatus.setAlignment(Qt.AlignCenter)
-            self.lab_timer.show()            
+            self.lab_timer.show()
+            # Print sys log
+            self.print_log(0, "START button clicked (Mode : " + self.cmb_modeSelection.currentText() + ")")
 
     def func_stop(self):
         if self.flag_start:
@@ -140,6 +175,7 @@ class MyApp(QtWidgets.QMainWindow):
                 self.flag_start = False
                 self.operation_timer = 0
                 self.lab_timer.setText("0000:00:00")
+                self.print_log(0, "STOP button clicked")  # Print sys log
 
     def func_unlock(self):
         # Interlock Start/Stop/Unlock button
@@ -159,6 +195,6 @@ class MyApp(QtWidgets.QMainWindow):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    window = MyApp()
+    window = StatusGUI()
     window.show()
     sys.exit(app.exec_())

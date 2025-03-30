@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>856</width>
-    <height>611</height>
+    <height>660</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -23,27 +23,6 @@
    <enum>QTabWidget::Rounded</enum>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QLabel" name="label_7">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>420</y>
-      <width>841</width>
-      <height>141</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <family>한컴 고딕</family>
-     </font>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">background-color: rgb(255, 255, 255);</string>
-    </property>
-    <property name="text">
-     <string>Log viewer</string>
-    </property>
-   </widget>
    <widget class="QTabWidget" name="tabWidget">
     <property name="geometry">
      <rect>
@@ -591,7 +570,7 @@
     <property name="geometry">
      <rect>
       <x>0</x>
-      <y>570</y>
+      <y>620</y>
       <width>871</width>
       <height>20</height>
      </rect>
@@ -1230,6 +1209,60 @@ QPushButton:hover {
      </property>
     </widget>
    </widget>
+   <widget class="QTabWidget" name="tabWidget_2">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>413</y>
+      <width>851</width>
+      <height>211</height>
+     </rect>
+    </property>
+    <property name="currentIndex">
+     <number>0</number>
+    </property>
+    <widget class="QWidget" name="tab_2">
+     <attribute name="title">
+      <string>System log</string>
+     </attribute>
+     <widget class="QTextEdit" name="txtEdit_sysLog">
+      <property name="geometry">
+       <rect>
+        <x>3</x>
+        <y>0</y>
+        <width>831</width>
+        <height>181</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QWidget" name="tab_3">
+     <attribute name="title">
+      <string>CAN log</string>
+     </attribute>
+     <widget class="QTextEdit" name="txtEdit_canLog">
+      <property name="geometry">
+       <rect>
+        <x>3</x>
+        <y>0</y>
+        <width>831</width>
+        <height>181</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);</string>
+      </property>
+     </widget>
+    </widget>
+   </widget>
+   <zorder>tabWidget</zorder>
+   <zorder>frame_top</zorder>
+   <zorder>groupBox_2</zorder>
+   <zorder>tabWidget_2</zorder>
+   <zorder>frame_top_2</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">

@@ -11,6 +11,7 @@
     <file>UI_IMG/on_hov.png</file>
   </qresource>
   <qresource prefix="etc">
+    <file>UI_IMG/custom_setting_explain.png</file>
     <file>UI_IMG/folder_icon.png</file>
     <file>UI_IMG/x_icon.png</file>
   </qresource>

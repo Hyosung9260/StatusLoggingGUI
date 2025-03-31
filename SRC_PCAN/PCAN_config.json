@@ -1,0 +1,30 @@
+{
+  "BitrateTXT" : "f_clock_mhz=40,nom_brp=5,nom_tseg1=11,nom_tseg2=4,nom_sjw=1,data_brp=1,data_tseg1=7,data_tseg2=2,data_sjw=1",
+  "CAN_ID": "0",
+  "data_start_flag": "0xBB",
+  "data_end_flag": "0xEE",
+  "RECV_MSG_ID": "0D0",
+  "RECV_GSENS_ID": "0AC",
+
+  "DEV_ID_LIST": ["0", "1", "2"],
+  "MSG_ID_LIST": {
+   "0D0": "Example1",
+   "0D1": "Example2",
+   "0D2": "Example3",
+   "0D3": "Example4"
+  },
+
+  "DLC_MSG_BUNDLE": {
+   "sensorReset": ["4", ["10", "11", "01"]],
+   "sensorStart": ["4", ["10", "11", "02"]],
+   "sensorStop": ["4", ["10", "11", "03"]],
+   "channelCfg": ["10", ["10", "20", "02"]],
+   "chirpComnCfg": ["13", ["10", "20", "07"]],
+   "chirpTimingCfg": ["12", ["10", "21", "07"]],
+   "frameCfg": ["13", ["10", "20", "08"]],
+   "lowPowerCfg": ["8", ["10", "20", "05"]],
+   "canLogging": ["10", ["01", "01", "0D", "01"]],
+   "cmpRngBsAndRxChnPhs": ["10", ["10", "20", "0E"]],
+   "modeSelection": ["8", ["10", "20", "1E"]]
+  }
+}

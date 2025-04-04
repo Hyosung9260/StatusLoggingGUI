@@ -1,6 +1,7 @@
 import numpy as np
 from SRC_PCAN.PCANBasic import *
 import json
+from Status_DEF import *
 
 IS_WINDOWS = platform.system() == 'Windows'
 
@@ -24,18 +25,15 @@ class PCANControl:
         self.m_objPCANBasic = PCANBasic()
         self.start_flag = False
 
-        with open('./SRC_PCAN/PCAN_config.json') as config_file:
-            self.pcan_config = json.load(config_file)
-
-        self.m_BitrateTXT = self.pcan_config['BitrateTXT']
-        self.MSG_ID = self.pcan_config['MSG_ID']
+        self.m_BitrateTXT = BITRATE
+        # self.MSG_ID = self.pcan_config['MSG_ID']
 
     ''' Below: CAN Status Related Functions'''
     def initialize(self, dev_id):
         _, m_PCANHandle = self.get_handle_from_id(dev_id)  # id에 상응하는 USBBUS handle 값 찾기
         error_ok = self.m_objPCANBasic.InitializeFD(m_PCANHandle, bytes(self.m_BitrateTXT, 'utf-8'))    # 해당 handle에 대해 CAN Connection 수행
         if error_ok == PCAN_ERROR_OK:               # CAN 연결 성공
-            print('\n[Message] PCAN USB FD Device ID:{} has been \033[92mCONNECTED\033[0m'.format(dev_id))
+            print('[Message] PCAN USB FD Device ID:{} has been \033[92mCONNECTED\033[0m'.format(dev_id))
             return True
         else:                                       # CAN 연결 실패
             print("\033[91mError: Something wrong during connecting PCAN USB FD Device ID:\033[0m{}".format(dev_id))
@@ -77,22 +75,14 @@ class PCANControl:
                 # print('Warn: PCAN_ERROR_QRCVEMPTY')
                 pass
 
-            flag = theMsg.DATA[:5]
+            flag = theMsg.DATA[:8]
             msg_id = theMsg.ID
-            if msg_id == int(self.pcan_config['RECV_GSENS_ID'], 16):
-                if output_mode == 'numpy':
-                    gMemData = np.frombuffer(theMsg.DATA, dtype='>i2')
-                elif output_mode == 'bytes':
-                    gMemData = theMsg.DATA
-                else:
-                    print("Available Mode: 'numpy' or 'bytes'")
+            if output_mode == 'numpy':
+                gMemData = np.frombuffer(theMsg.DATA[8:], dtype=np.int16)
+            elif output_mode == 'bytes':
+                gMemData = theMsg.DATA
             else:
-                if output_mode == 'numpy':
-                    gMemData = np.frombuffer(theMsg.DATA, dtype=np.int16)
-                elif output_mode == 'bytes':
-                    gMemData = theMsg.DATA
-                else:
-                    print("Available Mode: 'numpy' or 'bytes'")
+                print("Available Mode: 'numpy' or 'bytes'")
             return flag, gMemData, msg_id
 
         else:
@@ -138,38 +128,67 @@ class PCANControl:
 
     def write_msg_frame(self, m_PCANHandle, m_ID, m_DLC, msg_frame):
         CANMsg = TPCANMsgFD()               # CAN Message 전송을 위한 structure class로 다음 업무를 수행:1. msg_frame을 ctypes로 변경, 2. CAN ID 전달, 3. DLC를 이용한 데이터 변환
-        CANMsg.ID = int(m_ID, 16)           # 입력 받은 CAN Message ID를 hex to integer로 변경
-        CANMsg.MSGTYPE = PCAN_MESSAGE_FD.value | PCAN_MESSAGE_BRS.value
+        CANMsg.ID = int(m_ID, 16)           # 입력 받은 CAN Message ID를 hex to integer로 변경        
         CANMsg.DLC = int(m_DLC)             # 입력 받은 DLC를 hex to integer로 변경
-        CANMsg_length = len(msg_frame)   # DLC를 통해 메세지 프레임의 길이를 파악
+        CANMsg_length = len(msg_frame)      # DLC를 통해 메세지 프레임의 길이를 파악
+        if m_ID == TALEGATE_MSG_ID[0]:
+            CANMsg.MSGTYPE = PCAN_MESSAGE_EXTENDED
+        else:
+            CANMsg.MSGTYPE = PCAN_MESSAGE_FD
 
         for i in range(CANMsg_length):                      # 메세지 프레임 길이 만큼 msg_frame 값을 CANMsg 구조체에 값을 복사함
             CANMsg.DATA[i] = int(msg_frame[i], 16)          # 전송 할 메세지 복사
         return self.m_objPCANBasic.WriteFD(m_PCANHandle, CANMsg)    # 전송하고자하는 PcanHandle 채널로 CANMsg를 전송 후, 전송 여부를 반납
 
-    def send_sensorStart(self, m_PCANHandle):
-        DLC_MSG = self.pcan_config['DLC_MSG_BUNDLE']['sensorStart']
-        m_DLC = DLC_MSG[0]
-        msg_frame = DLC_MSG[1]
+    def send_actSensor(self, m_PCANHandle, kind_of_test):
+        if kind_of_test:    # Door test
+            for msg_id in DOOR_MSG_ID_LIST.keys():
+                m_DLC = DOOR_DLC
+                msg_frame = DOOR_ACT
+                error_ok = self.write_msg_frame(m_PCANHandle, msg_id, m_DLC, msg_frame)
 
-        error_ok = self.write_msg_frame(m_PCANHandle, self.MSG_ID, m_DLC, msg_frame)
-        if error_ok == PCAN_ERROR_OK:
-            _, dev_id = self.get_id_from_handle(m_PCANHandle)
-            print('\n[Message] Device {} has been successfully operated "sensorStart"'.format(dev_id))
-        else:
-            raise ValueError('\033[91m[Error] Error happens during operating "sensorStart"\033[0m')
+                if error_ok == PCAN_ERROR_OK:
+                    _, dev_id = self.get_id_from_handle(m_PCANHandle)
+                    print('\n[Message] Device {} has been successfully send message "actSensor"'.format(dev_id))
+                else:
+                    raise ValueError('\033[91m[Error] Error occured while sending the message "actSensor"\033[0m')
+                
+        else:               # Talegate test
+            msg_id = TALEGATE_MSG_ID[0]
+            m_DLC = TALEGATE_DLC
+            msg_frame = TALEGATE_ACT
+            error_ok = self.write_msg_frame(m_PCANHandle, msg_id, m_DLC, msg_frame)
+        
+            if error_ok == PCAN_ERROR_OK:
+                _, dev_id = self.get_id_from_handle(m_PCANHandle)
+                print('\n[Message] Device {} has been successfully send message "actSensor"'.format(dev_id))
+            else:
+                raise ValueError('\033[91m[Error] Error occured while sending the message "actSensor"\033[0m')
 
-    def send_sensorStop(self, m_PCANHandle):
-        DLC_MSG = self.pcan_config['DLC_MSG_BUNDLE']['sensorStop']
-        m_DLC = DLC_MSG[0]
-        msg_frame = DLC_MSG[1]
+    def send_deactSensor(self, m_PCANHandle, kind_of_test):
+        if kind_of_test:    # Door test
+            for msg_id in DOOR_MSG_ID_LIST.keys():
+                m_DLC = DOOR_DLC
+                msg_frame = DOOR_ACT
+                error_ok = self.write_msg_frame(m_PCANHandle, msg_id, m_DLC, msg_frame)
 
-        error_ok = self.write_msg_frame(m_PCANHandle, self.MSG_ID, m_DLC, msg_frame)
-        if error_ok == PCAN_ERROR_OK:
-            _, dev_id = self.get_id_from_handle(m_PCANHandle)
-            print('[Message] Device {} has been successfully operated "sensorStop"'.format(dev_id))
-        else:
-            raise ValueError('\033[91m[Error] Error happens during operating "sensorStop"\033[0m')
+                if error_ok == PCAN_ERROR_OK:
+                    _, dev_id = self.get_id_from_handle(m_PCANHandle)
+                    print('[Message] Device {} has been successfully operated "deactSensor"'.format(dev_id))
+                else:
+                    raise ValueError('\033[91m[Error] Error happens during operating "deactSensor"\033[0m')
+                
+        else:               # Talegate test
+            msg_id = TALEGATE_MSG_ID[0]
+            m_DLC = TALEGATE_DLC
+            msg_frame = TALEGATE_ACT
+            error_ok = self.write_msg_frame(m_PCANHandle, msg_id, m_DLC, msg_frame)
+        
+            if error_ok == PCAN_ERROR_OK:
+                _, dev_id = self.get_id_from_handle(m_PCANHandle)
+                print('[Message] Device {} has been successfully operated "sensorStop"'.format(dev_id))
+            else:
+                raise ValueError('\033[91m[Error] Error happens during operating "sensorStop"\033[0m')
 
     def send_pcan_cli(self, dev_id, cmd, msg):
         _, m_PCANHandle = self.get_handle_from_id(dev_id)

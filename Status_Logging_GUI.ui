@@ -160,10 +160,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -172,10 +176,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -210,10 +218,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -222,10 +234,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -516,10 +532,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -528,10 +548,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -566,10 +590,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -578,10 +606,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -827,10 +859,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -839,10 +875,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -877,10 +917,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -889,10 +933,14 @@
           <property name="font">
            <font>
             <family>한컴 고딕</family>
+            <pointsize>14</pointsize>
            </font>
           </property>
           <property name="text">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;right&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;0&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -2469,6 +2517,32 @@ QPushButton:hover {
       </property>
      </widget>
     </widget>
+    <widget class="QWidget" name="tab_4">
+     <attribute name="title">
+      <string>CRIT Log</string>
+     </attribute>
+     <widget class="QTextEdit" name="txtEdit_criLog">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>831</width>
+        <height>141</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <family>한컴 고딕</family>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="readOnly">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </widget>
    </widget>
    <widget class="QGroupBox" name="group_customModeSetting">
     <property name="geometry">
@@ -3049,6 +3123,50 @@ QPushButton:hover {
    </property>
   </widget>
  </widget>
+ <tabstops>
+  <tabstop>radioBtn_manualMode</tabstop>
+  <tabstop>radioBtn_autoMode</tabstop>
+  <tabstop>cmb_modeSelection</tabstop>
+  <tabstop>line_logFileName</tabstop>
+  <tabstop>btn_clearFileName</tabstop>
+  <tabstop>line_logFilePath</tabstop>
+  <tabstop>btn_folder</tabstop>
+  <tabstop>radioBtn_door</tabstop>
+  <tabstop>radioBtn_talegate</tabstop>
+  <tabstop>spinBox_devID1</tabstop>
+  <tabstop>btn_device1</tabstop>
+  <tabstop>spinBox_devID2</tabstop>
+  <tabstop>btn_device2</tabstop>
+  <tabstop>spinBox_devID3</tabstop>
+  <tabstop>btn_device3</tabstop>
+  <tabstop>btn_canConnectionCheck</tabstop>
+  <tabstop>radioBtn_sysLogSave</tabstop>
+  <tabstop>radioBtn_sysLogMon</tabstop>
+  <tabstop>line_sysLogFilePath</tabstop>
+  <tabstop>btn_folder_sysLog</tabstop>
+  <tabstop>btn_start</tabstop>
+  <tabstop>btn_stop</tabstop>
+  <tabstop>btn_unlock</tabstop>
+  <tabstop>checkBox_InnerMode</tabstop>
+  <tabstop>line_innerOnTime</tabstop>
+  <tabstop>line_innerOffTime</tabstop>
+  <tabstop>line_numInnerCycle</tabstop>
+  <tabstop>line_outerOffTime</tabstop>
+  <tabstop>line_numOuterCycle</tabstop>
+  <tabstop>btn_clearCycleSetting</tabstop>
+  <tabstop>line_totalInnerCycleTime</tabstop>
+  <tabstop>line_totalOuterCycleTime</tabstop>
+  <tabstop>line_totalTestTime</tabstop>
+  <tabstop>line_currentCycle</tabstop>
+  <tabstop>line_remainCycle</tabstop>
+  <tabstop>tabWidget_2</tabstop>
+  <tabstop>txtEdit_sysLog</tabstop>
+  <tabstop>tabWidget</tabstop>
+  <tabstop>line_radar1</tabstop>
+  <tabstop>line_radar2</tabstop>
+  <tabstop>line_radar3</tabstop>
+  <tabstop>txtEdit_canLog</tabstop>
+ </tabstops>
  <resources>
   <include location="SRC_Qt5/img_source.qrc"/>
  </resources>

@@ -78,15 +78,20 @@ class PCANControl:
             flag = theMsg.DATA[:8]
             msg_id = theMsg.ID
             if output_mode == 'numpy':
-                gMemData = np.frombuffer(theMsg.DATA[8:], dtype=np.int16)
+                gMemData = np.frombuffer(theMsg.DATA, dtype=np.uint8)
             elif output_mode == 'bytes':
                 gMemData = theMsg.DATA
             else:
                 print("Available Mode: 'numpy' or 'bytes'")
+            # gMemData = np.array([int(b, 16) for b in gMemData])
             return flag, gMemData, msg_id
 
         else:
-            raise ValueError('\033[91m[Error] Error happens during receiving CAN-FD data: {}\033[0m'.format(error_OK))
+            # raise ValueError('\033[91m[Error] Error happens during receiving CAN-FD data: {}\033[0m'.format(error_OK))
+            flag = 0
+            gMemData = 0
+            msg_id = 0
+            return flag, gMemData, msg_id
 
     def GetLengthFromDLC(self, dlc):
         if dlc <= 8:
@@ -131,7 +136,7 @@ class PCANControl:
         CANMsg.ID = int(m_ID, 16)           # 입력 받은 CAN Message ID를 hex to integer로 변경        
         CANMsg.DLC = int(m_DLC)             # 입력 받은 DLC를 hex to integer로 변경
         CANMsg_length = len(msg_frame)      # DLC를 통해 메세지 프레임의 길이를 파악
-        if m_ID == TALEGATE_MSG_ID[0]:
+        if CANMsg.ID > 0xFFF:
             CANMsg.MSGTYPE = PCAN_MESSAGE_EXTENDED
         else:
             CANMsg.MSGTYPE = PCAN_MESSAGE_FD

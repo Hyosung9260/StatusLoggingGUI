@@ -2,10 +2,14 @@
 ##### PCAN Configuration #####
 ##############################
 # Basic configuration
+MAX_ERROR_COUNT     = 10
+CONFIRM_OFF_COUNT   = 10
 BITRATE             = "f_clock_mhz=40,nom_brp=1,nom_tseg1=63,nom_tseg2=16,nom_sjw=16,data_brp=2,data_tseg1=14,data_tseg2=5,data_sjw=4"
 DEV_ID_LIST         = ["0", "1", "2"]
 RECV_MSG_ID_LIST    = {"": "FL", "": "FR", "": "RL", "": "RR", "": "TG"}
-TEMP_LIMIT          = [0, 100]
+
+TX_POWER_LIMIT      = [10, 14]
+TEMP_LIMIT          = [-40, 125]
 
 # Door test message preset
 DOOR_MSG_ID_LIST    = {"1E1": "FL", "1E2": "FR", "1E3": "RL", "1E4": "RR"}

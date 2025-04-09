@@ -9,8 +9,9 @@ import logging.handlers
 
 from Status_DEF import *
 from threading import Thread
-from Status_Logging_QUEUE_MANAGER import *
+from SRC_PCAN.PCANBasic import *
 from SRC_PCAN.PCAN_CONTROLLER import PCANControl
+
 
 from PyQt5.QtGui import QFont
 from PyQt5 import QtWidgets, uic
@@ -37,6 +38,8 @@ version = "version 0.0.6"
 - Graph view 기능 추가 (QThread or Thread)
 - MOBED와 RODS 테스트모드 구분
 - 로그파일 저장 경로에 폴더가 없으면 폴더를 생성하는 기능 추가
+- Sys log, CAN log가 어떤건 저장되고 어떤건 저장 안되는(저장 옵션이 켜져 있음에도) 부분이 있을 수 있으므로 전체 확인
+    > 특히 CANReadWorker에서 emit으로 전송한 CAN log부분
 
 * 엑셀에서 테스트 모드 데이터 로드하는 방안 강구
 '''
@@ -47,10 +50,11 @@ color_enable = "background-color: rgb(170, 0, 0);\ncolor: rgb(255, 255, 255);\nb
 color_lock = "background-color: rgb(90, 90, 90);\ncolor: rgb(255, 255, 255);\nborder-radius: 6px;"
 
 class CANReadWorker(QObject):
-    log_signal = pyqtSignal(int, str)               # Signal for print log
-    finished = pyqtSignal()                         # Signal for worker finish
-    update_signal = pyqtSignal(int, str, str, str, str)  # Signal for update TxPower, Temperature
-    stop_signal = pyqtSignal()                      # Signal for worker stop
+    log_signal = pyqtSignal(int, str)                       # Signal for print log
+    finished = pyqtSignal()                                 # Signal for worker finish
+    update_signal = pyqtSignal(int, str, str, str, str)     # Signal for update TxPower, Temperature
+    onOff_signal = pyqtSignal(bool)                         # Signal for check radar on/off
+    stop_signal = pyqtSignal()                              # Signal for worker stop    
 
     def __init__(self, pcan_ctrl, dev_id, flag_door_test, flag_auto_start, parent=None):
         super().__init__(parent)
@@ -58,29 +62,38 @@ class CANReadWorker(QObject):
         self.dev_id = dev_id
         self.flag_door_test = flag_door_test
         self.flag_auto_start = flag_auto_start
+        self.onOff_signal.connect(self.control_onOff)
         self.stop_signal.connect(self.stop)
         self.running = True
+        self.flag_on = False
+        self.flag_deact = False
         self.send_count = 0       
         self.ascii_data_tx0 = 0
         self.ascii_data_tx1 = 0
         self.ascii_data_tx2 = 0
         self.ascii_data_temp = 0 
-    
+        self.onOffErrorCount = 0
+        self.offCount = 0
+        self.pcan_handle = None
+            
     def run(self):
-        self.log_signal.emit(0, "CAN read thread started")
+        # Get PCAN USB handle and Receive event
+        _, self.pcan_handle = self.pcan_ctrl.get_handle_from_id(self.dev_id)
+        _, self.receive_event = self.pcan_ctrl.InitializeEvent(Channel=self.pcan_handle)
 
-        _, pcan_handle = self.pcan_ctrl.get_handle_from_id(self.dev_id)
-        _, receive_event = self.pcan_ctrl.InitializeEvent(Channel=pcan_handle)
-
-        if self.pcan_ctrl.reset_handle(pcan_handle) != 0:
+        if self.pcan_ctrl.reset_handle(self.pcan_handle) != 0:
             self.log_signal.emit(0, "Reset failed")
             self.finished.emit()
             return
 
+        # Initial Act message write
+        if not self.flag_auto_start:
+            self.send_act_msg()
+        
         # Timer for TxPower/Temperature requrest message write (2ms -> 500ms)
         self.Timer_2ms = QTimer()
         self.Timer_2ms.setInterval(2)
-        self.Timer_2ms.timeout.connect(lambda: self.send_msg_2ms(pcan_handle))
+        self.Timer_2ms.timeout.connect(lambda: self.send_msg_2ms())
         self.Timer_2ms.moveToThread(QThread.currentThread())
 
         self.Timer_500ms = QTimer()
@@ -90,25 +103,32 @@ class CANReadWorker(QObject):
 
         # Write 'send tx power and temp' request cmd (2ms - 500ms)
         self.Timer_2ms.start()
-
         loop = QEventLoop()
-            
+
+        self.log_signal.emit(0, "CAN read thread started")
         while self.running:
-            msg_flag, msg_data, msg_id = self.pcan_ctrl.read_unit_buf(
-                m_PCANHandle=pcan_handle, 
-                recv_event=receive_event,
-                wait_time=1000, 
-                output_mode='numpy', 
-                evt_mode=False
-            )
+            msg_flag, msg_data, msg_id = self.pcan_ctrl.read_unit_buf(m_PCANHandle=self.pcan_handle, recv_event=self.receive_event, wait_time=1000, output_mode='numpy', evt_mode=False)
+
             if self.flag_auto_start:
                 if self.flag_door_test:
+                    # TODO :: Door test의 경우 MSG_ID 체크
                     pass
 
                 else:   # Talegate test
                     if msg_id == 0x17FC0014 or msg_id == 0x17C5F801:    # 40ms sleep check
-                        # self.log_signal.emit(0, f"{self.running} 17FC0014 / 17C5F801")
-                        pass
+                        if self.flag_on:
+                            if self.onOffErrorCount != 0:
+                                self.onOffErrorCount = 0
+                                self.flag_deact == False
+                        else:   # OFF                            
+                            self.log_signal.emit(0, f"[CAN] Deact Error count : {self.onOffErrorCount} / {MAX_ERROR_COUNT}")
+                            self.check_onOff(self.flag_on)
+                            time.sleep(0.1)  # 100 ms
+                            if self.onOffErrorCount > MAX_ERROR_COUNT:
+                                # TODO :: 조치할 내용 추가
+                                self.log_signal.emit(0, f"[ERROR] Radar device deact error")
+                            self.onOffErrorCount += 1
+
                     elif msg_id == 0x1FF11400:      # TxPower / Temperature
                         # Tx0 Power
                         if msg_data[5] == 0x50 and msg_data[6] == 0x6F and msg_data[7] == 0x77 and msg_data[8] == 0x65 and msg_data[9] == 0x72:
@@ -136,24 +156,57 @@ class CANReadWorker(QObject):
                         else:
                             pass
                         self.update_signal.emit(self.dev_id, str(self.ascii_data_tx0), str(self.ascii_data_tx1), str(self.ascii_data_tx2), str(self.ascii_data_temp))
+                    
+                    else:   # No message react from radar
+                        if self.flag_on:
+                            if msg_id == 999:
+                                self.onOffErrorCount += 1
+                                self.log_signal.emit(0, f"[CAN] Act Error count : {self.onOffErrorCount} / {MAX_ERROR_COUNT}")
+                                self.check_onOff(self.flag_on)
+                                time.sleep(0.1)  # 100 ms
+                                if self.onOffErrorCount > MAX_ERROR_COUNT:
+                                    # TODO :: 조치할 내용 추가
+                                    self.log_signal.emit(0, f"[ERROR] Radar device act error")
+                        else:   # OFF
+                            if msg_id == 0:
+                                self.offCount += 1
+                                time.sleep(0.1)  # 100 ms
+                                if self.offCount > CONFIRM_OFF_COUNT and self.flag_deact == False:
+                                    self.log_signal.emit(0, "[CAN] Radar device is deactivated")
+                                    self.flag_deact = True
+            
             else:   # Manual start firmware
-                pass
+                if self.flag_door_test:
+                    pass
+
+                else:   # Talegate test                    
+                    pass
 
             loop.processEvents(QEventLoop.AllEvents, 10)
-            
         
         self.Timer_2ms.stop()
         self.Timer_500ms.stop()
-        self.pcan_ctrl.CloseEvent(receive_event)
+        self.pcan_ctrl.CloseEvent(self.receive_event)
         self.finished.emit()
     
-    def send_msg_2ms(self, pcan_handle):
-        msg_id = TALEGATE_MSG_ID[1]
-        dlc = len(TALEGATE_PWR_TEMP)
-        msg_frame = TALEGATE_PWR_TEMP
+    def send_msg_2ms(self):
+        # TODO :: On 인지 Off인지 확인해서 전송주기 조절
+        if self.flag_door_test:
+            pass
 
-        self.pcan_ctrl.write_msg_frame(pcan_handle, msg_id, dlc, msg_frame)
-        # TODO :: error check
+        else:   # Talegate test
+            msg_id = TALEGATE_MSG_ID[1]
+            dlc = len(TALEGATE_PWR_TEMP)
+            msg_frame = TALEGATE_PWR_TEMP
+
+        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle, msg_id, dlc, msg_frame)
+        if error_ok == PCAN_ERROR_OK:
+            # self.log_signal.emit(1, "[CAN] message write : TxPower/Temp request")
+            pass
+        else:
+            # TODO :: 에러 메시지 출력
+            self.log_signal.emit(1, "[CAN] message write : TxPower/Temp request failed")
+            pass
 
         self.send_count += 1
         if self.send_count >= 2:
@@ -163,7 +216,63 @@ class CANReadWorker(QObject):
     def send_msg_500ms(self):
         self.send_count = 0
         self.Timer_2ms.start()
+
+    def send_act_msg(self):
+        if self.flag_door_test:
+            pass
+
+        else:   # Talegate test
+            msg_id = TALEGATE_MSG_ID[0]
+            dlc = len(TALEGATE_ACT)
+            msg_frame = TALEGATE_ACT
+
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle, msg_id, dlc, msg_frame)
+            if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
+                self.log_signal.emit(1, "[CAN] message write : Act")
+                self.offCount = 0             
+            else:                           # Failed to write CAN message
+                # TODO :: 에러 메시지 출력
+                self.log_signal.emit(1, "[ERROR] message write : Act")                
+                pass            
+
+    def send_deact_msg(self):
+        if self.flag_door_test:
+            pass
+
+        else:   # Talegate test
+            msg_id = TALEGATE_MSG_ID[0]
+            dlc = len(TALEGATE_DEACT)
+            msg_frame = TALEGATE_DEACT
+
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle, msg_id, dlc, msg_frame)
+            if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
+                self.log_signal.emit(1, "[CAN] message write : Deact")
+            else:                           # Failed to write CAN message
+                # TODO :: 에러 메시지 출력
+                self.log_signal.emit(1, "[ERROR] message write : Deact")
+                pass
+        
+        
+        # TODO :: 실제로 Sleep인지 확인, 계속 깨어있으면 n번 Deact 반복 전송, 그래도 깨어있으면 오류 메시지 전송 (emit)
+        pass
+
+    def control_onOff(self, onOffStatus):
+        self.log_signal.emit(0, f"[Worker] On/Off Signal recieved : {onOffStatus}")
+        if onOffStatus: # ON
+            self.flag_on = True
+        else:           # OFF
+            self.flag_on = False
     
+    def check_onOff(self, onOffStatus):
+        if onOffStatus: # ON
+            self.send_act_msg()
+            time.sleep(0.05)
+        else:           # OFF
+            self.send_act_msg()
+            time.sleep(0.05)
+            self.send_deact_msg()
+            time.sleep(1)
+
     def stop(self):
         self.running = False
 
@@ -192,7 +301,7 @@ class StatusGUI(QtWidgets.QMainWindow):
 
         # Initialize flag
         self.flag_start = False
-        self.flag_unlock = False
+        self.flag_lock = False
         self.flag_innerCycle = True
         self.flag_innerOnTime = True
         self.flag_work_outer_cycle = False
@@ -200,6 +309,7 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.flag_door_test = True
         self.flag_test_finished = False
         self.flag_auto_start = True
+        self.flag_on = False
         
         # Initialize variables
         self.connected_dev_id = []
@@ -278,6 +388,12 @@ class StatusGUI(QtWidgets.QMainWindow):
         secs = self.operation_timer % 60
         self.lab_timer.setText(f"{hours:04}:{mins:02}:{secs:02}")
 
+    def func_emit_onOffStatus(self, onOffStatus):
+        # Emit signal to stop read can message
+        for dev_id, worker in self.worker_dict.items():
+            worker.onOff_signal.emit(onOffStatus)
+            self.print_log(0, f"All workers have been signaled to check On/Off : {onOffStatus}")
+
     def inner_cycle_work(self):
         if self.flag_innerOnTime:
             if self.inner_cycle_timer < self.innerOnTime - 1:
@@ -285,26 +401,31 @@ class StatusGUI(QtWidgets.QMainWindow):
             else:
                 self.print_log(0, "write [Deact] Message")
                 self.inner_cycle_timer = 0
+                self.flag_on = False
+                self.func_emit_onOffStatus(self.flag_on)
                 self.flag_innerOnTime = False
         else:
             if self.inner_cycle_timer < self.innerOffTime - 1:
                 self.inner_cycle_timer += 1
             else:
                 self.inner_cycle_timer = 0
-                self.crntInnerCycle += 1
-                self.flag_innerOnTime = True
+                self.crntInnerCycle += 1                
                 
                 if self.crntInnerCycle < self.numInnerCycle:
+                    self.flag_on = True
+                    self.func_emit_onOffStatus(self.flag_on)
+                    self.flag_innerOnTime = True
                     self.print_log(0, "write [Act] Message")
                 else:                    
-                    self.flag_work_outer_cycle = True
                     self.crntInnerCycle = 0
                     if self.flag_innerCycle:
                         self.flag_test_finished = True
+                        self.print_log(0, "Test completed")
                         self.func_unlock()
                         self.func_stop()
-                        self.print_log(0, "Test completed")
+                        
                     else:
+                        self.flag_work_outer_cycle = True
                         self.print_log(0, "Inner cycle completed")
     
     def outer_cycle_work(self):
@@ -319,6 +440,8 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.flag_work_outer_cycle = False
 
                 if self.crntOuterCycle < self.numOuterCycle:
+                    self.flag_on = True
+                    self.func_emit_onOffStatus(self.flag_on)
                     self.print_log(0, "write [Act] Message")
                     self.print_log(0, f"Current Outer Cycle : {self.crntOuterCycle} / Total Outer Cycle : {self.numOuterCycle}")
                 else:
@@ -329,10 +452,13 @@ class StatusGUI(QtWidgets.QMainWindow):
                     self.func_stop()
 
     def cycle_counter(self):
-        if self.flag_innerCycle:
-            self.inner_cycle_work()
-        else:
-            self.outer_cycle_work()
+        if self.line_innerOnTime.text().strip():
+            if self.flag_innerCycle:
+                self.inner_cycle_work()
+            else:
+                self.outer_cycle_work()
+        else:   # Case that user want continuous operation
+            pass
 
     def update_time(self):
         if self.flag_start:
@@ -440,22 +566,16 @@ class StatusGUI(QtWidgets.QMainWindow):
 
             sysLogMsg = f"CAN device disconnected : {dev_id}"
             self.print_log(0, sysLogMsg)
-            if self.flag_saveSyslog:
-                self.sys_logger.debug(sysLogMsg)            
             return True
         else:
             sysLogMsg = f"CAN device disconnect failed : {dev_id}"
             self.print_log(0, sysLogMsg)
-            if self.flag_saveSyslog:
-                self.sys_logger.debug(sysLogMsg)
             return False
 
     def connect_can_dev(self, dev_id, radar_id):
         if dev_id in self.connected_dev_id:
             sysLogMsg = f"CAN device already connected : {dev_id}"
             self.print_log(0, sysLogMsg)
-            if self.flag_saveSyslog:
-                self.sys_logger.debug(sysLogMsg)
             return False
         else:
             connect_result = self.pcan_ctrl.initialize(dev_id=dev_id)
@@ -465,14 +585,10 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.connected_dev_dict[radar_id] = dev_id
                 sysLogMsg = f"CAN device connected : {dev_id}"
                 self.print_log(0, sysLogMsg)
-                if self.flag_saveSyslog:
-                    self.sys_logger.debug(sysLogMsg)            
                 return True
             else:
                 sysLogMsg = f"CAN device connect failed : {dev_id}"
                 self.print_log(0, sysLogMsg)
-                if self.flag_saveSyslog:
-                    self.sys_logger.debug(sysLogMsg)            
                 return False
     
     def update_can_dev1(self):
@@ -532,13 +648,11 @@ class StatusGUI(QtWidgets.QMainWindow):
         if self.flag_door_test:
             for count in range(10):
                 _, _, recv_msg_id = self.pcan_ctrl.read_unit_buf(m_PCANHandle=pcan_handle,recv_event=receive_event,wait_time=1000,output_mode='numpy',evt_mode=False)
-                print(f"recv_msg_id : {recv_msg_id}")
+                # print(f"recv_msg_id : {recv_msg_id}")
                 if str(hex(recv_msg_id)) in DOOR_RCV_MSG_ID_FL:
                     # Print system log
                     sysLogMsg = "Radar connected : CAN ID " + str(self.connected_dev_id[0]) + "_FL"
                     self.print_log(0, sysLogMsg)
-                    if self.flag_saveSyslog:
-                        self.sys_logger.debug(sysLogMsg)
                     num_radar_dev += 1
                     if num_radar_dev > 3:
                         break
@@ -546,8 +660,6 @@ class StatusGUI(QtWidgets.QMainWindow):
                     # Print system log
                     sysLogMsg = "Radar connected : CAN ID " + str(self.connected_dev_id[0]) + "_FR"
                     self.print_log(0, sysLogMsg)
-                    if self.flag_saveSyslog:
-                        self.sys_logger.debug(sysLogMsg)
                     num_radar_dev += 1
                     if num_radar_dev > 3:
                         break
@@ -555,8 +667,6 @@ class StatusGUI(QtWidgets.QMainWindow):
                     # Print system log
                     sysLogMsg = "Radar connected : CAN ID " + str(self.connected_dev_id[0]) + "_RL"
                     self.print_log(0, sysLogMsg)
-                    if self.flag_saveSyslog:
-                        self.sys_logger.debug(sysLogMsg)
                     num_radar_dev += 1
                     if num_radar_dev > 3:
                         break
@@ -564,8 +674,6 @@ class StatusGUI(QtWidgets.QMainWindow):
                     # Print system log
                     sysLogMsg = "Radar connected : CAN ID " + str(self.connected_dev_id[0]) + "_RR"
                     self.print_log(0, sysLogMsg)
-                    if self.flag_saveSyslog:
-                        self.sys_logger.debug(sysLogMsg)
                     num_radar_dev += 1
                     if num_radar_dev > 3:
                         break
@@ -581,9 +689,6 @@ class StatusGUI(QtWidgets.QMainWindow):
                         # Print system log
                         sysLogMsg = "Radar connected : CAN ID " + str(self.connected_dev_id) + "_TG"
                         self.print_log(0, sysLogMsg)
-                        if self.flag_saveSyslog:
-                            self.sys_logger.debug(sysLogMsg)
-
                         flag_findDev = 1
                         # break
                 else:
@@ -640,6 +745,8 @@ class StatusGUI(QtWidgets.QMainWindow):
                 sys_cursor.movePosition(sys_cursor.Start)
                 sys_cursor.select(sys_cursor.BlockUnderCursor)
                 sys_cursor.removeSelectedText()
+            if self.flag_saveSyslog:
+                self.sys_logger.debug(message)
         # category 1 : CAN log
         elif category == 1:
             self.txtEdit_canLog.append(f"[{logging_date}_{logging_time}] {message}")
@@ -648,7 +755,8 @@ class StatusGUI(QtWidgets.QMainWindow):
                 can_cursor = self.txtEdit_canLog.textCursor()
                 can_cursor.movePosition(can_cursor.Start)
                 can_cursor.select(can_cursor.BlockUnderCursor)
-                can_cursor.removeSelectedText()
+                can_cursor.removeSelectedText()   
+            self.oper_logger.debug(message)
 
     def func_modeSelection(self):
         date = datetime.datetime.now()
@@ -703,7 +811,7 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.worker_dict[dev_id] = worker
     
     def update_worker_data(self, dev_id, tx0, tx1, tx2, temp):
-        print(tx0, tx1, tx2, temp)
+        # print(tx0, tx1, tx2, temp)
         if self.connected_dev_dict[1] == dev_id:
             self.lab_Rdr1_txPwr1.setText(tx0)
             self.lab_Rdr1_txPwr2.setText(tx1)
@@ -722,8 +830,6 @@ class StatusGUI(QtWidgets.QMainWindow):
         else:
             sysLogMsg = "Dev_id is not matched with any Radar_id"
             self.print_log(0, sysLogMsg)
-            if self.flag_saveSyslog:
-                self.sys_logger.debug(sysLogMsg)
 
     def process_start(self):
         # Generate thread as num of connected dev
@@ -734,9 +840,14 @@ class StatusGUI(QtWidgets.QMainWindow):
         # When clicked start button, poped up a messageBox to confirm
         reply = QMessageBox.question(self, "확인 메시지", "테스트를 시작하시겠습니까?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
+            # Process start
+            self.process_start()
+
             # Interlock Start/Stop/Unlock button
             self.flag_start = True
-            self.flag_unlock = True
+            self.flag_lock = True
+            self.flag_on = True
+            self.func_emit_onOffStatus(self.flag_on)
             self.btn_start.setEnabled(False)
             self.btn_start.setStyleSheet(color_disable)
             self.btn_unlock.setEnabled(True)
@@ -752,10 +863,7 @@ class StatusGUI(QtWidgets.QMainWindow):
             self.group_modeSelection.setEnabled(False)
             self.group_canConnect.setEnabled(False)
             self.group_logConfig.setEnabled(False)
-            self.group_customModeSetting.setEnabled(False)
-
-            # Process start
-            self.process_start()
+            self.group_customModeSetting.setEnabled(False)            
             
             # Save operation log
             oper_logger_filename = self.line_logFilePath.text() + '/' + self.line_logFileName.text() + '.log'
@@ -767,10 +875,6 @@ class StatusGUI(QtWidgets.QMainWindow):
             # Print system log
             sysLogMsg = "START button clicked (Mode : " + self.cmb_modeSelection.currentText() + ")"
             self.print_log(0, sysLogMsg)
-            if self.flag_saveSyslog:
-                self.sys_logger.debug(sysLogMsg)
-
-            self.print_log(0, "write [Act] Message")
             
     def func_stop(self):
         if self.flag_start and self.flag_test_finished == False:
@@ -803,7 +907,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 # Emit signal to stop read can message
                 for dev_id, worker in self.worker_dict.items():
                     worker.stop_signal.emit()
-                    self.print_log(0, "All workers have been signaled to stop")                
+                    self.print_log(0, "All workers have been signaled to stop")
 
                 # Remove logger handler
                 self.oper_logger.removeHandler(self.oper_log_handler)
@@ -847,14 +951,14 @@ class StatusGUI(QtWidgets.QMainWindow):
     def func_unlock(self):
         # Interlock Start/Stop/Unlock button
         if self.flag_start:
-            if self.flag_unlock:
-                self.flag_unlock = False
+            if self.flag_lock:
+                self.flag_lock = False
                 self.btn_unlock.setStyleSheet(color_lock)
                 self.btn_unlock.setText("LOCK")
                 self.btn_stop.setEnabled(True)
                 self.btn_stop.setStyleSheet(color_enable)
             else:
-                self.flag_unlock = True
+                self.flag_lock = True
                 self.btn_unlock.setStyleSheet(color_enable)
                 self.btn_unlock.setText("UNLOCK")
                 self.btn_stop.setEnabled(False)

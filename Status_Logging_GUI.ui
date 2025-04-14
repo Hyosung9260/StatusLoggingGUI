@@ -363,7 +363,7 @@
          <string notr="true">background-color: rgb(239, 239, 239);</string>
         </property>
         <property name="text">
-         <string>사용자 입력 디바이스명</string>
+         <string>FL</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -544,7 +544,7 @@
          </widget>
         </item>
         <item row="12" column="0">
-         <widget class="QLabel" name="lab_Rdr2_temp">
+         <widget class="QLabel" name="lab_Rdr2_tmp">
           <property name="font">
            <font>
             <family>한컴 고딕</family>
@@ -735,7 +735,7 @@
          <string notr="true">background-color: rgb(239, 239, 239);</string>
         </property>
         <property name="text">
-         <string>사용자 입력 디바이스명</string>
+         <string>FR</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -871,7 +871,7 @@
          </widget>
         </item>
         <item row="12" column="0">
-         <widget class="QLabel" name="lab_Rdr3_temp">
+         <widget class="QLabel" name="lab_Rdr3_tmp">
           <property name="font">
            <font>
             <family>한컴 고딕</family>
@@ -1062,7 +1062,7 @@
          <string notr="true">background-color: rgb(239, 239, 239);</string>
         </property>
         <property name="text">
-         <string>사용자 입력 디바이스명</string>
+         <string>RR</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -1328,7 +1328,7 @@ border-radius: 6px;</string>
        <x>10</x>
        <y>240</y>
        <width>231</width>
-       <height>171</height>
+       <height>141</height>
       </rect>
      </property>
      <property name="font">
@@ -1695,30 +1695,6 @@ QPushButton:checked:hover{
         <set>Qt::AlignCenter</set>
        </property>
       </widget>
-     </widget>
-     <widget class="QPushButton" name="btn_canConnectionCheck">
-      <property name="enabled">
-       <bool>false</bool>
-      </property>
-      <property name="geometry">
-       <rect>
-        <x>40</x>
-        <y>140</y>
-        <width>151</width>
-        <height>23</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <family>한컴 고딕</family>
-       </font>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">color: rgb(0, 0, 255);</string>
-      </property>
-      <property name="text">
-       <string>Message Check</string>
-      </property>
      </widget>
     </widget>
     <widget class="QLabel" name="lab_programStatus">
@@ -2455,7 +2431,7 @@ QPushButton:hover {
      <rect>
       <x>270</x>
       <y>450</y>
-      <width>711</width>
+      <width>361</width>
       <height>171</height>
      </rect>
     </property>
@@ -2474,59 +2450,7 @@ QPushButton:hover {
        <rect>
         <x>3</x>
         <y>0</y>
-        <width>701</width>
-        <height>141</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <family>한컴 고딕</family>
-       </font>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">background-color: rgb(255, 255, 255);</string>
-      </property>
-      <property name="readOnly">
-       <bool>true</bool>
-      </property>
-     </widget>
-    </widget>
-    <widget class="QWidget" name="tab_3">
-     <attribute name="title">
-      <string>CAN Log</string>
-     </attribute>
-     <widget class="QTextEdit" name="txtEdit_canLog">
-      <property name="geometry">
-       <rect>
-        <x>0</x>
-        <y>0</y>
-        <width>711</width>
-        <height>141</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <family>한컴 고딕</family>
-       </font>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">background-color: rgb(255, 255, 255);</string>
-      </property>
-      <property name="readOnly">
-       <bool>true</bool>
-      </property>
-     </widget>
-    </widget>
-    <widget class="QWidget" name="tab_4">
-     <attribute name="title">
-      <string>CRIT Log</string>
-     </attribute>
-     <widget class="QTextEdit" name="txtEdit_criLog">
-      <property name="geometry">
-       <rect>
-        <x>0</x>
-        <y>0</y>
-        <width>701</width>
+        <width>351</width>
         <height>141</height>
        </rect>
       </property>
@@ -3116,31 +3040,181 @@ QPushButton:hover {
     <property name="title">
      <string/>
     </property>
-    <widget class="QPushButton" name="pushButton">
+    <widget class="QPushButton" name="btn_clearSysLog">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>70</y>
+       <width>75</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Clear Sys log</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_R1_preRqst">
      <property name="geometry">
       <rect>
        <x>10</x>
        <y>10</y>
-       <width>75</width>
+       <width>31</width>
        <height>23</height>
       </rect>
      </property>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+      </font>
+     </property>
      <property name="text">
-      <string>Act cmd</string>
+      <string>R1</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="pushButton_2">
+    <widget class="QPushButton" name="btn_clearCanLog">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>60</y>
+       <y>100</y>
        <width>75</width>
        <height>23</height>
       </rect>
      </property>
-     <property name="text">
-      <string>Deact cmd</string>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+       <pointsize>8</pointsize>
+      </font>
      </property>
+     <property name="text">
+      <string>Clear CAN log</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_clearCriLog">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>130</y>
+       <width>75</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Clear Cri log</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_R3_preRqst">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>40</y>
+       <width>31</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+      </font>
+     </property>
+     <property name="text">
+      <string>R3</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_R2_preRqst">
+     <property name="geometry">
+      <rect>
+       <x>50</x>
+       <y>10</y>
+       <width>31</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+      </font>
+     </property>
+     <property name="text">
+      <string>R2</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QTabWidget" name="tabWidget_3">
+    <property name="geometry">
+     <rect>
+      <x>630</x>
+      <y>450</y>
+      <width>361</width>
+      <height>171</height>
+     </rect>
+    </property>
+    <property name="currentIndex">
+     <number>0</number>
+    </property>
+    <widget class="QWidget" name="tab_5">
+     <attribute name="title">
+      <string>CAN Log</string>
+     </attribute>
+     <widget class="QTextEdit" name="txtEdit_canLog">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>351</width>
+        <height>141</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <family>한컴 고딕</family>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="readOnly">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QWidget" name="tab_6">
+     <attribute name="title">
+      <string>Critical Log</string>
+     </attribute>
+     <widget class="QTextEdit" name="txtEdit_criLog">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>351</width>
+        <height>141</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <family>한컴 고딕</family>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="readOnly">
+       <bool>true</bool>
+      </property>
+     </widget>
     </widget>
    </widget>
    <zorder>tabWidget</zorder>
@@ -3151,6 +3225,7 @@ QPushButton:hover {
    <zorder>group_customModeSetting</zorder>
    <zorder>groupBox_12</zorder>
    <zorder>groupBox</zorder>
+   <zorder>tabWidget_3</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -3179,7 +3254,6 @@ QPushButton:hover {
   <tabstop>btn_device2</tabstop>
   <tabstop>spinBox_devID3</tabstop>
   <tabstop>btn_device3</tabstop>
-  <tabstop>btn_canConnectionCheck</tabstop>
   <tabstop>radioBtn_sysLogSave</tabstop>
   <tabstop>radioBtn_sysLogMon</tabstop>
   <tabstop>line_sysLogFilePath</tabstop>
@@ -3205,7 +3279,6 @@ QPushButton:hover {
   <tabstop>line_radar1</tabstop>
   <tabstop>line_radar2</tabstop>
   <tabstop>line_radar3</tabstop>
-  <tabstop>txtEdit_canLog</tabstop>
  </tabstops>
  <resources>
   <include location="SRC_Qt5/img_source.qrc"/>

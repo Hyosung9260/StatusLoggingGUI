@@ -75,7 +75,7 @@ class PCANControl:
                 # print('Warn: PCAN_ERROR_QRCVEMPTY')
                 pass
 
-            flag = theMsg.DATA[:8]
+            # flag = theMsg.DATA[:8]
             msg_id = theMsg.ID
             if output_mode == 'numpy':
                 gMemData = np.frombuffer(theMsg.DATA, dtype=np.uint8)
@@ -84,14 +84,13 @@ class PCANControl:
             else:
                 print("Available Mode: 'numpy' or 'bytes'")
             # gMemData = np.array([int(b, 16) for b in gMemData])
-            return flag, gMemData, msg_id
+            return gMemData, msg_id
 
         else:
             # raise ValueError('\033[91m[Error] Error happens during receiving CAN-FD data: {}\033[0m'.format(error_OK))
-            flag = 0
             gMemData = 0
             msg_id = 0
-            return flag, gMemData, msg_id
+            return gMemData, msg_id
 
     def GetLengthFromDLC(self, dlc):
         if dlc <= 8:
@@ -136,8 +135,8 @@ class PCANControl:
         CANMsg.ID = int(m_ID, 16)           # 입력 받은 CAN Message ID를 hex to integer로 변경        
         CANMsg.DLC = int(m_DLC)             # 입력 받은 DLC를 hex to integer로 변경
         CANMsg_length = len(msg_frame)      # DLC를 통해 메세지 프레임의 길이를 파악
-        if CANMsg.ID > 0xFFF:
-            CANMsg.MSGTYPE = PCAN_MESSAGE_EXTENDED
+        if CANMsg.ID > 0xFFFF:
+            CANMsg.MSGTYPE = PCAN_MESSAGE_EXTENDED.value | PCAN_MESSAGE_FD.value | PCAN_MESSAGE_BRS.value
         else:
             CANMsg.MSGTYPE = PCAN_MESSAGE_FD
 
@@ -148,7 +147,7 @@ class PCANControl:
     def send_actSensor(self, m_PCANHandle, kind_of_test):
         if kind_of_test:    # Door test
             for msg_id in DOOR_MSG_ID_LIST.keys():
-                m_DLC = DOOR_DLC
+                m_DLC = DOOR_DLC 
                 msg_frame = DOOR_ACT
                 error_ok = self.write_msg_frame(m_PCANHandle, msg_id, m_DLC, msg_frame)
 

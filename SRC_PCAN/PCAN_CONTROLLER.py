@@ -58,7 +58,7 @@ class PCANControl:
         error, m_PCANHandle = self.m_objPCANBasic.LookUpChannel(id_bytes)  # CAN_connector_id에 해당하는 USBBUS Handle 값을 찾음
         return error, m_PCANHandle
 
-    def read_unit_buf(self, m_PCANHandle, recv_event=None, wait_time=300, output_mode='numpy', evt_mode=True):
+    def read_unit_buf(self, m_PCANHandle, recv_event=None, wait_time=300, output_mode='numpy', evt_mode=False):
         if evt_mode:
             if IS_WINDOWS:
                 if win32event.WaitForSingleObject(recv_event, wait_time) == win32event.WAIT_OBJECT_0:

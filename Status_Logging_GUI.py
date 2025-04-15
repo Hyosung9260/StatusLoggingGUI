@@ -8,10 +8,8 @@ import img_source_rc
 import logging.handlers
 
 from Status_DEF import *
-from threading import Thread
 from SRC_PCAN.PCANBasic import *
 from SRC_PCAN.PCAN_CONTROLLER import PCANControl
-
 
 from PyQt5.QtGui import QFont
 from PyQt5 import QtWidgets, uic
@@ -19,15 +17,11 @@ from PyQt5.QtWidgets import QMessageBox, QFileDialog
 from PyQt5.QtCore import QTimer, QTime, QThread, Qt, pyqtSignal, QObject, QEventLoop, pyqtSlot
 
 update_date = "25.04.07"
-version = "version 0.0.6"
+version = "version 0.1.1"
 '''
-# NOTE Ver_0.1.0
-1. CAN Thread 분기
-    > Main GUI thread, CAN write thread, CAN read thread(Max 3 thread)
-    > Radar Act/Deact 자동 체크
-2. Radar 구동방식 변경
-    > ON time 동안 500ms 주기로 act 신호 전송
-
+# NOTE Ver_0.1.1
+1. 전원 OFF -> ON 후에도 Power/Temp 정상 출력되도록 수정
+2. 
 
 # TODO
 - PCAN connect (CAN ID, Device ID)
@@ -40,8 +34,6 @@ version = "version 0.0.6"
 - Graph view 기능 추가 (QThread or Thread)
 - MOBED와 RODS 테스트모드 구분
 - 로그파일 저장 경로에 폴더가 없으면 폴더를 생성하는 기능 추가
-- Sys log, CAN log가 어떤건 저장되고 어떤건 저장 안되는(저장 옵션이 켜져 있음에도) 부분이 있을 수 있으므로 전체 확인
-    > 특히 CANReadWorker에서 emit으로 전송한 CAN log부분
 
 * 엑셀에서 테스트 모드 데이터 로드하는 방안 강구
 '''
@@ -76,10 +68,7 @@ class CANWriteWorker(QObject):
     
     @pyqtSlot(bool)
     def write_act_deact(self, onOffStatus):
-        # self.log_signal.emit(0, f"[WRITE] On/Off Signal recieved : {onOffStatus}")
-
         if onOffStatus: # ON
-            # QTimer.singleShot(200, lambda: self.write_pre_pwr_tmp_request())
             self.write_act_msg(False, 0)
             QThread.msleep(150)
             self.write_pre_pwr_tmp_request()
@@ -87,13 +76,11 @@ class CANWriteWorker(QObject):
             # Send act message to read thread
             for dev_id, worker in self.read_worker_dict.items():
                 worker.onOff_signal.emit(onOffStatus)
-
             self.act_sequence()
+
         else:           # OFF
             self.timer_tx_power.stop()
-            # self.write_act_msg(False, 0)
             self.write_deact_msg(False, 0)
-            # QTimer.singleShot(200, lambda: self.write_deact_msg(False, 0))
             
             # Send act message to read thread
             for dev_id, worker in self.read_worker_dict.items():
@@ -101,15 +88,14 @@ class CANWriteWorker(QObject):
     
     @pyqtSlot(int, bool)
     def write_resend(self, dev_id, resend_act):
-        # self.log_signal.emit(0, f"[WRITE] dev_id={dev_id} request act(true)/deact(False) = {resend_act}")
-        
         if dev_id == 0x1FF100A2:
             self.write_pwr_tmp_request(FL)
         elif dev_id == 0x1FF100A3:
             self.write_pwr_tmp_request(FR)
         elif dev_id == 0x1FF100A5:
             self.write_pwr_tmp_request(RR)
-        elif dev_id == 555:
+
+        elif dev_id == 555:     # Write FL power/temp request message
             msg_id = DOOR_FL_MSG_ID[1]
             dlc = len(RQST_PWR_TEMP_PRE1)
             msg_frame_pre1 = RQST_PWR_TEMP_PRE1
@@ -119,7 +105,12 @@ class CANWriteWorker(QObject):
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre1)
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre2)
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre3)
-        elif dev_id == 666:
+            if error_ok == PCAN_ERROR_OK:
+                pass
+            else:
+                self.log_signal.emit(0, "[ERROR] Power/Temp request failed : FL")
+
+        elif dev_id == 666:     # Write FR power/temp request message
             msg_id = DOOR_FR_MSG_ID[1]
             dlc = len(RQST_PWR_TEMP_PRE1)
             msg_frame_pre1 = RQST_PWR_TEMP_PRE1
@@ -129,7 +120,12 @@ class CANWriteWorker(QObject):
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre1)
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre2)
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre3)
-        elif dev_id == 777:
+            if error_ok == PCAN_ERROR_OK:
+                pass
+            else:
+                self.log_signal.emit(0, "[ERROR] Power/Temp request failed : FR")
+
+        elif dev_id == 777:     # Write RR power/temp request message
             msg_id = DOOR_RR_MSG_ID[1]
             dlc = len(RQST_PWR_TEMP_PRE1)
             msg_frame_pre1 = RQST_PWR_TEMP_PRE1
@@ -139,6 +135,11 @@ class CANWriteWorker(QObject):
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre1)
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre2)
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre3)
+            if error_ok == PCAN_ERROR_OK:
+                pass
+            else:
+                self.log_signal.emit(0, "[ERROR] Power/Temp request failed : RR")
+
         else:
             pcan_handle = self.pcan_handle_dict[dev_id]
             if pcan_handle is None:
@@ -146,35 +147,13 @@ class CANWriteWorker(QObject):
                 return
             if resend_act:
                 self.write_act_msg(True, dev_id)
-                # QTimer.singleShot(200, lambda: self.write_act_msg(True, dev_id))
             else:
                 self.timer_tx_power.stop()
                 self.write_deact_msg(True, dev_id)
-                # QTimer.singleShot(200, lambda: self.write_deact_msg(True, dev_id))
     
     def act_sequence(self):
         self.write_act_msg(False, 0)
         self.timer_tx_power.start(500)
-
-    '''
-    def start_power_temp_loop(self):
-        # self.send_count = 0
-        self._send_power_temp_step()
-
-    def _send_power_temp_step(self):
-        self.write_power_temp_request()
-        
-        # RQST → 500ms → RQST (repeat)
-        self.timer_tx_power.start(250)
-
-        # # RQST → 2ms → RQST → 500ms (Repeat)
-        # self.send_count += 1
-        # if self.send_count < 2:
-        #     self.timer_tx_power.start(2)
-        # else:
-        #     self.send_count = 0
-        #     self.timer_tx_power.start(500)
-    '''
 
     def write_FL_pre_request(self):
         msg_id = DOOR_FL_MSG_ID[1]
@@ -187,7 +166,6 @@ class CANWriteWorker(QObject):
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre2)
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre3)            
         if error_ok == PCAN_ERROR_OK:
-            # self.log_signal.emit(0, "Message write : TxPower/Temp request resend FL")
             pass
         else:
             self.log_signal.emit(0, "[ERROR] TxPower/Temp pre request failed : FL")
@@ -203,7 +181,6 @@ class CANWriteWorker(QObject):
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre2)
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre3)            
         if error_ok == PCAN_ERROR_OK:
-            # self.log_signal.emit(0, "Message write : TxPower/Temp request resend FR")
             pass
         else:
             self.log_signal.emit(0, "[ERROR] TxPower/Temp pre request failed : FR")
@@ -219,7 +196,6 @@ class CANWriteWorker(QObject):
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre2)
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre3)            
         if error_ok == PCAN_ERROR_OK:
-            # self.log_signal.emit(0, "Message write : TxPower/Temp request resend RR")
             pass
         else:
             self.log_signal.emit(0, "[ERROR] TxPower/Temp pre request failed : RR")
@@ -231,7 +207,6 @@ class CANWriteWorker(QObject):
 
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame)
         if error_ok == PCAN_ERROR_OK:
-            # self.log_signal.emit(0, "Message write : FL deact")
             pass
         else:
             self.log_signal.emit(0, "[ERROR] Deact failed : FL")
@@ -243,7 +218,6 @@ class CANWriteWorker(QObject):
 
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame)
         if error_ok == PCAN_ERROR_OK:
-            # self.log_signal.emit(0, "Message write : FR deact")
             pass
         else:
             self.log_signal.emit(0, "[ERROR] Deact failed : FR")
@@ -255,7 +229,6 @@ class CANWriteWorker(QObject):
 
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame)
         if error_ok == PCAN_ERROR_OK:
-            # self.log_signal.emit(0, "Message write : RR deact")
             pass
         else:
             self.log_signal.emit(0, "[ERROR] Deact failed : RR")
@@ -274,7 +247,6 @@ class CANWriteWorker(QObject):
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre2)
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre3)            
             if error_ok == PCAN_ERROR_OK:
-                # self.log_signal.emit(0, "[THREAD] message write : TxPower/Temp request")
                 pass
             else:
                 self.log_signal.emit(0, "[ERROR] TxPower/Temp pre request failed : FL")
@@ -284,7 +256,6 @@ class CANWriteWorker(QObject):
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame_pre2)
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame_pre3)
             if error_ok == PCAN_ERROR_OK:
-                # self.log_signal.emit(0, "[THREAD] message write : TxPower/Temp request")
                 pass
             else:
                 self.log_signal.emit(0, "[ERROR] TxPower/Temp pre request failed : FR")
@@ -294,7 +265,6 @@ class CANWriteWorker(QObject):
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame_pre2)
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame_pre3)
             if error_ok == PCAN_ERROR_OK:
-                # self.log_signal.emit(0, "[THREAD] message write : TxPower/Temp request")
                 pass
             else:
                 self.log_signal.emit(0, "[ERROR] TxPower/Temp pre request failed : RR")
@@ -310,7 +280,6 @@ class CANWriteWorker(QObject):
             for dev_id in self.connected_dev_id:
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre1)
                 if error_ok == PCAN_ERROR_OK:
-                    # self.log_signal.emit(0, "[THREAD] message write : TxPower/Temp request")
                     pass
                 else:
                     self.log_signal.emit(0, "[ERROR] TxPower/Temp request failed : Pre request 1")
@@ -318,7 +287,6 @@ class CANWriteWorker(QObject):
             for dev_id in self.connected_dev_id:
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre2)
                 if error_ok == PCAN_ERROR_OK:
-                    # self.log_signal.emit(0, "[THREAD] message write : TxPower/Temp request")
                     pass
                 else:
                     self.log_signal.emit(0, "[ERROR] TxPower/Temp request failed : Pre request 2")
@@ -326,7 +294,6 @@ class CANWriteWorker(QObject):
             for dev_id in self.connected_dev_id:
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre3)
                 if error_ok == PCAN_ERROR_OK:
-                    # self.log_signal.emit(0, "[THREAD] message write : TxPower/Temp request")
                     pass
                 else:
                     self.log_signal.emit(0, "[ERROR] TxPower/Temp request failed : Pre request 3")
@@ -346,7 +313,6 @@ class CANWriteWorker(QObject):
 
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame)
             if error_ok == PCAN_ERROR_OK:
-                # self.log_signal.emit(0, "[THREAD] message write : TxPower/Temp request")
                 pass
             else:
                 self.log_signal.emit(0, f"[ERROR] TxPower/Temp request failed : {sensorType}")
@@ -359,7 +325,6 @@ class CANWriteWorker(QObject):
             for dev_id in self.connected_dev_id:
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:
-                    # self.log_signal.emit(0, "[THREAD] message write : TxPower/Temp request")
                     pass
                 else:
                     self.log_signal.emit(0, "[ERROR] message write : TxPower/Temp request failed")
@@ -375,7 +340,7 @@ class CANWriteWorker(QObject):
 
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : Act")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : Act")
 
@@ -386,7 +351,7 @@ class CANWriteWorker(QObject):
 
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id_re], msg_id, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : Act")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : Act")
         else:
@@ -399,21 +364,21 @@ class CANWriteWorker(QObject):
 
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_FL, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : FL Act")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, f"[ERROR] message write : FL Act {error_ok}")
 
                 QThread.msleep(50)
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_FR, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : FR Act")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : FR Act")
 
                 QThread.msleep(50)
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_RR, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : RR Act")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : RR Act")
 
@@ -425,7 +390,7 @@ class CANWriteWorker(QObject):
                 for dev_id in self.connected_dev_id:
                     error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame)
                     if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                        self.log_signal.emit(0, "[THREAD_WRITE] message write : Act")
+                        pass
                     else:                           # Failed to write CAN message
                         self.log_signal.emit(0, "[ERROR] message write : Act")
 
@@ -440,19 +405,19 @@ class CANWriteWorker(QObject):
 
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id_FL, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : FL Deact")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : FL Deact")
 
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id_FR, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : FR Deact")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : FR Deact")
 
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id_RR, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : RR Deact")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : RR Deact")
 
@@ -463,7 +428,7 @@ class CANWriteWorker(QObject):
 
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id_re], msg_id, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : Deact")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : Deact")
         else:
@@ -476,19 +441,19 @@ class CANWriteWorker(QObject):
 
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : FL Deact")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : FL Deact")
 
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : FR Deact")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : FR Deact")
 
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    self.log_signal.emit(0, "[THREAD_WRITE] message write : RR Deact")
+                    pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : RR Deact")
 
@@ -500,7 +465,7 @@ class CANWriteWorker(QObject):
                 for dev_id in self.connected_dev_id:
                     error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame)
                     if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                        self.log_signal.emit(0, "[THREAD_WRITE] message write : Deact")
+                        pass
                     else:                           # Failed to write CAN message
                         self.log_signal.emit(0, "[ERROR] message write : Deact")
     
@@ -510,7 +475,7 @@ class CANWriteWorker(QObject):
 class CANReadWorker(QObject):
     log_signal = pyqtSignal(int, str)                                # Signal for print log
     finished = pyqtSignal()                                          # Signal for worker finish
-    update_data_signal = pyqtSignal(bool, int, str, str, str, str)     # Signal for update TxPower, Temperature
+    update_data_signal = pyqtSignal(bool, int, str, str, str, str)   # Signal for update TxPower, Temperature
     onOff_signal = pyqtSignal(bool)                                  # Signal for check radar on/off
     resend_signal = pyqtSignal(int, bool)                            # Signal for Act/Deact resend request
     stop_signal = pyqtSignal()                                       # Signal for worker stop
@@ -604,6 +569,7 @@ class CANReadWorker(QObject):
         if msg_id == 0x1FF100A2:
             if not self.flag_FL_on:
                 self.flag_FL_on = True
+                self.count_FL_pre_request = 0
             data_code, result = self.get_txpower_temp(msg_id, msg_data)
             if data_code == "Tx0":
                 self.ascii_data_tx0 = result
@@ -618,6 +584,7 @@ class CANReadWorker(QObject):
         elif msg_id == 0x1FF100A3:
             if not self.flag_FR_on:
                 self.flag_FR_on = True
+                self.count_FR_pre_request = 0
             data_code, result = self.get_txpower_temp(msg_id, msg_data)
             if data_code == "Tx0":
                 self.ascii_data_tx0_r2 = result
@@ -636,6 +603,7 @@ class CANReadWorker(QObject):
         elif msg_id == 0x1FF100A5:
             if not self.flag_RR_on:
                 self.flag_RR_on = True
+                self.count_RR_pre_request = 0
             data_code, result = self.get_txpower_temp(msg_id, msg_data)
             if data_code == "Tx0":
                 self.ascii_data_tx0_r3 = result
@@ -733,7 +701,6 @@ class CANReadWorker(QObject):
             self.flag_act = False
 
     def resend_request(self):
-        # TODO :: 사용하지 않는 코드 추후 정리
         if self.flag_act:
             if not self.flag_FL_on:
                 self.count_FL_pre_request += 1
@@ -741,21 +708,20 @@ class CANReadWorker(QObject):
                 self.count_FR_pre_request += 1
             elif not self.flag_RR_on:
                 self.count_RR_pre_request += 1
-            
-            # if self.flag_FL_on and self.flag_FR_on and self.flag_RR_on:
-            #     self.count_FL_pre_request = 0
-            #     self.count_FR_pre_request = 0
-            #     self.count_RR_pre_request = 0
 
-            if self.count_FL_pre_request > 3:
+            self.flag_FL_on = False
+            self.flag_FR_on = False
+            self.flag_RR_on = False
+
+            if self.count_FL_pre_request > 2:
                 self.log_signal.emit(0, "[THREAD_READ] FL pre resend request")
                 self.resend_signal.emit(555, True)
                 self.count_FL_pre_request = 0
-            elif self.count_FR_pre_request > 3:
+            elif self.count_FR_pre_request > 2:
                 self.log_signal.emit(0, "[THREAD_READ] FR pre resend request")
                 self.resend_signal.emit(666, True)
                 self.count_FR_pre_request = 0
-            elif self.count_RR_pre_request > 3:
+            elif self.count_RR_pre_request > 2:
                 self.log_signal.emit(0, "[THREAD_READ] RR pre resend request")
                 self.resend_signal.emit(777, True)
                 self.count_RR_pre_request = 0
@@ -807,6 +773,7 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.flag_door_test = True
         self.flag_test_finished = False
         self.flag_on = False
+        self.manualMode = True
         
         # Initialize variables
         self.connected_dev_id = []
@@ -836,7 +803,7 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.btn_unlock.setEnabled(False)
 
         # Initialize system related buttons/labels
-        self.cmb_modeSelection.currentTextChanged.connect(self.func_modeSelection)
+        self.cmb_modeSelection.currentIndexChanged.connect(self.func_modeSelection)
         self.checkBox_InnerMode.stateChanged.connect(self.toggle_test_mode_setting)
 
         self.btn_clearFileName.clicked.connect(self.func_clearFileName)
@@ -972,17 +939,23 @@ class StatusGUI(QtWidgets.QMainWindow):
         if self.flag_innerOnTime:
             if self.inner_cycle_timer < self.innerOnTime - 1:
                 self.inner_cycle_timer += 1
-            else:
+                self.line_remainTime.setText(f"{self.innerOnTime - self.inner_cycle_timer}")
+                self.line_currentMode.setText("InOn")
+            else:                
                 self.inner_cycle_timer = 0
+                self.line_remainTime.setText("0")
                 self.flag_on = False
                 self.func_emit_onOffStatus(self.flag_on)
                 self.flag_innerOnTime = False
         else:
             if self.inner_cycle_timer < self.innerOffTime - 1:
                 self.inner_cycle_timer += 1
+                self.line_remainTime.setText(f"{self.innerOffTime - self.inner_cycle_timer}")
+                self.line_currentMode.setText("InOff")
             else:
                 self.inner_cycle_timer = 0
-                self.crntInnerCycle += 1                
+                self.crntInnerCycle += 1
+                self.line_remainTime.setText("0")
                 
                 # Update current/remain cycle in GUI
                 self.line_currentCycle.setText(f"{self.crntInnerCycle}")
@@ -1009,13 +982,21 @@ class StatusGUI(QtWidgets.QMainWindow):
         else:
             if self.outer_cycle_timer < self.outerOffTime - 1:
                 self.outer_cycle_timer += 1
+                self.line_remainTime.setText(f"{self.outerOffTime - self.outer_cycle_timer}")
+                self.line_currentMode.setText("OutOff")
             else:
                 self.outer_cycle_timer = 0
                 self.crntOuterCycle += 1
+                self.line_remainTime.setText("0")
                 self.flag_work_outer_cycle = False
+
+                # Update current/remain cycle in GUI
+                self.line_currentOutCycle.setText(f"{self.crntOuterCycle}")
+                self.line_remainOutCycle.setText(f"{self.numOuterCycle-self.crntOuterCycle}")
 
                 if self.crntOuterCycle < self.numOuterCycle:
                     self.flag_on = True
+                    self.flag_innerOnTime = True
                     self.func_emit_onOffStatus(self.flag_on)
                     self.print_log(0, f"[MAIN] Current Outer Cycle : {self.crntOuterCycle} / Total Outer Cycle : {self.numOuterCycle}")
                 else:
@@ -1072,7 +1053,7 @@ class StatusGUI(QtWidgets.QMainWindow):
             hours = total_time_inner // 3600
             mins = (total_time_inner % 3600) // 60
             secs = total_time_inner % 60
-            self.line_totalTestTime.setText(f"{hours}시간{mins}분{secs}초")
+            self.line_totalTestTime.setText(f"{hours}시간 {mins}분 {secs}초")
 
             self.totalTestTime = total_time_inner
         # If occur exclude case, consider 0
@@ -1090,7 +1071,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 hours = total_time_outer // 3600
                 mins = (total_time_outer % 3600) // 60
                 secs = total_time_outer % 60
-                self.line_totalTestTime.setText(f"{hours}시간{mins}분{secs}초")
+                self.line_totalTestTime.setText(f"{hours}시간 {mins}분 {secs}초")
 
                 self.totalTestTime = total_time_outer
             except ValueError:
@@ -1130,9 +1111,11 @@ class StatusGUI(QtWidgets.QMainWindow):
         if self.radioBtn_manualMode.isChecked():
             self.radioBtn_autoMode.setChecked(False)
             self.group_customModeSetting.setEnabled(True)
-        else:
+            self.manualMode = True
+        else:   # Auto mode
             self.radioBtn_manualMode.setChecked(False)
             self.group_customModeSetting.setDisabled(True)
+            self.manualMode = False
     
     def update_syslog_mode(self):
         if self.radioBtn_sysLogMon.isChecked():
@@ -1363,11 +1346,54 @@ class StatusGUI(QtWidgets.QMainWindow):
             self.cri_logger.debug(message)
 
 
-    def func_modeSelection(self):
+    def func_modeSelection(self, index):
         date = datetime.datetime.now()
         select_date = date.strftime("%y.%m.%d")
         select_time = QTime.currentTime().toString("hh.mm.ss")
         self.line_logFileName.setText(self.cmb_modeSelection.currentText() + f"_{select_date}_{select_time}")
+        print(index)
+
+        if not self.manualMode:
+            if index == 15:
+                self.line_innerOnTime.setText("8")
+                self.line_innerOffTime.setText("12")
+                self.line_numInnerCycle.setText("1440")
+            elif index == 20:
+                self.checkBox_InnerMode.setChecked(False)
+                self.line_innerOnTime.setText("8")
+                self.line_innerOffTime.setText("12")
+                self.line_numInnerCycle.setText("30")
+                self.line_outerOffTime.setText("3000")
+                self.line_numOuterCycle.setText("96")
+            elif index in [22, 29]:
+                self.checkBox_InnerMode.setChecked(False)
+                self.line_innerOnTime.setText("8")
+                self.line_innerOffTime.setText("12")
+                self.line_numInnerCycle.setText("30")
+                self.line_outerOffTime.setText("3000")
+                self.line_numOuterCycle.setText("24")
+            elif index == 25:
+                self.checkBox_InnerMode.setChecked(False)
+                self.line_innerOnTime.setText("8")
+                self.line_innerOffTime.setText("12")
+                self.line_numInnerCycle.setText("15")
+                self.line_outerOffTime.setText("300")
+                self.line_numOuterCycle.setText("100")
+            elif index == 26:
+                self.checkBox_InnerMode.setChecked(False)
+                self.line_innerOnTime.setText("8")
+                self.line_innerOffTime.setText("12")
+                self.line_numInnerCycle.setText("45")
+                self.line_outerOffTime.setText("900")
+                self.line_numOuterCycle.setText("4")
+            elif index == 32:
+                self.checkBox_InnerMode.setChecked(False)
+                self.line_innerOnTime.setText("8")
+                self.line_innerOffTime.setText("12")
+                self.line_numInnerCycle.setText("30")
+                self.line_outerOffTime.setText("3000")
+                self.line_numOuterCycle.setText("1000")
+
 
     def func_clearFileName(self):
         self.line_logFileName.setText("")
@@ -1480,7 +1506,7 @@ class StatusGUI(QtWidgets.QMainWindow):
     def process_start(self):
         # Generate CAN read thread
         for dev_id in self.connected_dev_id:
-            pcan_handle = self.pcan_ctrl.get_handle_from_id(dev_id)
+            _, pcan_handle = self.pcan_ctrl.get_handle_from_id(dev_id)
             self.pcan_handle_dict[dev_id] = pcan_handle
             self.read_can_thread(dev_id, pcan_handle)
         
@@ -1521,7 +1547,10 @@ class StatusGUI(QtWidgets.QMainWindow):
 
                 # Update current/remain cycle in GUI
                 self.line_currentCycle.setText(f"{self.crntInnerCycle}")
-                self.line_remainCycle.setText(f"{self.numInnerCycle-self.crntInnerCycle}")
+                self.line_remainCycle.setText(f"{self.numInnerCycle}")
+                if not self.flag_innerCycle:
+                    self.line_currentOutCycle.setText(f"{self.crntOuterCycle}")
+                    self.line_remainOutCycle.setText(f"{self.numOuterCycle}")
                 
                 # Lock other functions
                 self.group_modeSelection.setEnabled(False)
@@ -1532,16 +1561,18 @@ class StatusGUI(QtWidgets.QMainWindow):
                 # Save operation log
                 oper_logger_filename = self.line_logFilePath.text() + '/' + self.line_logFileName.text() + '.log'
                 self.oper_log_handler = logging.handlers.RotatingFileHandler(filename=oper_logger_filename, mode='a', maxBytes=self.max_logFile_size)
-                oper_formatter = logging.Formatter(fmt='%(asctime)s > %(message)s')
+                oper_formatter = logging.Formatter(fmt='%(asctime)s\t%(message)s')
                 self.oper_log_handler.setFormatter(oper_formatter)
                 self.oper_logger.addHandler(self.oper_log_handler)
+                self.oper_logger.debug("Data\tTime\tTx0\tTx1\tTx2\tTemperature")
 
                 # Save critial log
                 cri_logger_filename = self.line_logFilePath.text() + '/' + self.line_logFileName.text() + '_crit.log'
                 self.cri_log_handler = logging.handlers.RotatingFileHandler(filename=cri_logger_filename, mode='a', maxBytes=self.max_logFile_size)
-                cri_formatter = logging.Formatter(fmt='%(asctime)s > %(message)s')
+                cri_formatter = logging.Formatter(fmt='%(asctime)s\t%(message)s')
                 self.cri_log_handler.setFormatter(cri_formatter)
                 self.cri_logger.addHandler(self.cri_log_handler)
+                self.cri_logger.debug("Data\tTime\tTx0\tTx1\tTx2\tTemperature")
         else:
             reply = QMessageBox.question(self, "확인 메시지", "하나 이상의 CAN Device를 연결해주십시오.", QMessageBox.Yes)
                        

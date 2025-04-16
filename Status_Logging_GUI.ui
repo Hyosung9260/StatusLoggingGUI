@@ -1237,7 +1237,7 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>30</y>
+      <y>33</y>
       <width>251</width>
       <height>581</height>
      </rect>
@@ -1724,7 +1724,7 @@ QPushButton:checked:hover{
     <widget class="QFrame" name="frame">
      <property name="geometry">
       <rect>
-       <x>10</x>
+       <x>20</x>
        <y>8</y>
        <width>71</width>
        <height>61</height>
@@ -2426,55 +2426,13 @@ QPushButton:hover {
     <zorder>group_modeSelection</zorder>
     <zorder>group_logConfig</zorder>
    </widget>
-   <widget class="QTabWidget" name="tabWidget_2">
-    <property name="geometry">
-     <rect>
-      <x>270</x>
-      <y>450</y>
-      <width>361</width>
-      <height>171</height>
-     </rect>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="currentIndex">
-     <number>0</number>
-    </property>
-    <widget class="QWidget" name="tab_2">
-     <attribute name="title">
-      <string>SYSTEM Log</string>
-     </attribute>
-     <widget class="QTextEdit" name="txtEdit_sysLog">
-      <property name="geometry">
-       <rect>
-        <x>3</x>
-        <y>0</y>
-        <width>351</width>
-        <height>141</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <family>한컴 고딕</family>
-       </font>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">background-color: rgb(255, 255, 255);</string>
-      </property>
-      <property name="readOnly">
-       <bool>true</bool>
-      </property>
-     </widget>
-    </widget>
-   </widget>
    <widget class="QGroupBox" name="group_customModeSetting">
     <property name="geometry">
      <rect>
       <x>270</x>
       <y>27</y>
       <width>231</width>
-      <height>321</height>
+      <height>451</height>
      </rect>
     </property>
     <property name="font">
@@ -2492,9 +2450,9 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>80</y>
+       <y>215</y>
        <width>211</width>
-       <height>128</height>
+       <height>129</height>
       </rect>
      </property>
      <property name="font">
@@ -2509,83 +2467,21 @@ QPushButton:hover {
       <property name="geometry">
        <rect>
         <x>12</x>
-        <y>20</y>
+        <y>21</y>
         <width>191</width>
-        <height>101</height>
+        <height>100</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_4" columnstretch="3,2,1">
-       <item row="1" column="1">
-        <widget class="QLineEdit" name="line_innerOffTime">
-         <property name="styleSheet">
-          <string notr="true">background-color: rgb(255, 255, 255);</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="2">
-        <widget class="QLabel" name="label_48">
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_42">
          <property name="font">
           <font>
            <family>한컴 고딕</family>
           </font>
          </property>
          <property name="text">
-          <string>회</string>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="1">
-        <widget class="QLineEdit" name="line_totalInnerCycleTime">
-         <property name="styleSheet">
-          <string notr="true"/>
-         </property>
-         <property name="text">
-          <string>0</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-         </property>
-         <property name="readOnly">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="2">
-        <widget class="QLabel" name="label_46">
-         <property name="font">
-          <font>
-           <family>한컴 고딕</family>
-          </font>
-         </property>
-         <property name="text">
-          <string>초</string>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="2">
-        <widget class="QLabel" name="label_47">
-         <property name="font">
-          <font>
-           <family>한컴 고딕</family>
-          </font>
-         </property>
-         <property name="text">
-          <string>초</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="2">
-        <widget class="QLabel" name="label_45">
-         <property name="font">
-          <font>
-           <family>한컴 고딕</family>
-          </font>
-         </property>
-         <property name="text">
-          <string>초</string>
+          <string>Inner OFF Time</string>
          </property>
         </widget>
        </item>
@@ -2596,18 +2492,6 @@ QPushButton:hover {
          </property>
          <property name="alignment">
           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <widget class="QLabel" name="label_42">
-         <property name="font">
-          <font>
-           <family>한컴 고딕</family>
-          </font>
-         </property>
-         <property name="text">
-          <string>Inner OFF Time</string>
          </property>
         </widget>
        </item>
@@ -2645,6 +2529,80 @@ QPushButton:hover {
          </property>
         </widget>
        </item>
+       <item row="2" column="2">
+        <widget class="QLabel" name="label_48">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>회</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QLineEdit" name="line_innerOffTime">
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 255, 255);</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QLineEdit" name="line_totalInnerCycleTime">
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+         <property name="text">
+          <string>0</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+         <property name="readOnly">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QLabel" name="label_46">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>초</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QLabel" name="label_45">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>초</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="2">
+        <widget class="QLabel" name="label_47">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>초</string>
+         </property>
+        </widget>
+       </item>
        <item row="0" column="0">
         <widget class="QLabel" name="label_41">
          <property name="font">
@@ -2667,9 +2625,9 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>209</y>
+       <y>345</y>
        <width>211</width>
-       <height>108</height>
+       <height>102</height>
       </rect>
      </property>
      <property name="font">
@@ -2684,9 +2642,9 @@ QPushButton:hover {
       <property name="geometry">
        <rect>
         <x>10</x>
-        <y>23</y>
+        <y>20</y>
         <width>191</width>
-        <height>80</height>
+        <height>74</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout" columnstretch="3,2,1">
@@ -2808,7 +2766,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>20</y>
+       <y>23</y>
        <width>211</width>
        <height>31</height>
       </rect>
@@ -2871,80 +2829,220 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>55</y>
+       <y>57</y>
        <width>211</width>
-       <height>25</height>
+       <height>155</height>
       </rect>
      </property>
-     <property name="title">
-      <string/>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+      </font>
      </property>
-     <widget class="QComboBox" name="cmb_preTest">
+     <property name="title">
+      <string>Pre test 세팅</string>
+     </property>
+     <widget class="QWidget" name="gridLayoutWidget_4">
       <property name="geometry">
        <rect>
-        <x>10</x>
-        <y>3</y>
-        <width>121</width>
-        <height>18</height>
+        <x>11</x>
+        <y>19</y>
+        <width>191</width>
+        <height>131</height>
        </rect>
       </property>
-      <property name="styleSheet">
-       <string notr="true">background-color: rgb(255, 255, 255);</string>
-      </property>
-      <item>
-       <property name="text">
-        <string>Pre ON Time</string>
-       </property>
-      </item>
-      <item>
-       <property name="text">
-        <string>Pre OFF Time</string>
-       </property>
-      </item>
-     </widget>
-     <widget class="QLineEdit" name="line_preTestTime">
-      <property name="geometry">
-       <rect>
-        <x>143</x>
-        <y>2</y>
-        <width>39</width>
-        <height>20</height>
-       </rect>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">background-color: rgb(255, 255, 255);</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-      </property>
-     </widget>
-     <widget class="QLabel" name="label_71">
-      <property name="geometry">
-       <rect>
-        <x>186</x>
-        <y>2</y>
-        <width>15</width>
-        <height>20</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <family>한컴 고딕</family>
-       </font>
-      </property>
-      <property name="text">
-       <string>초</string>
-      </property>
+      <layout class="QGridLayout" name="gridLayout_7" rowstretch="0,0,0,0,0" columnstretch="3,0,0">
+       <item row="3" column="0">
+        <widget class="QLabel" name="label_83">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>Pre wait Time</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="line_preOnTime">
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 255, 255);</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_75">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>Pre OFF Time</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QLineEdit" name="line_numPreCycle">
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 255, 255);</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="label_77">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>Num of Pre Cycle</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="0">
+        <widget class="QLabel" name="label_76">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>Total Pre Cycle Time   </string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="1">
+        <widget class="QLineEdit" name="line_totalPreCycleTime">
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+         <property name="text">
+          <string>0</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+         <property name="readOnly">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QLabel" name="label_79">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>초</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="2">
+        <widget class="QLabel" name="label_78">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>회</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QLineEdit" name="line_preOffTime">
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 255, 255);</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_82">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>Pre ON Time</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QLabel" name="label_80">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>초</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="2">
+        <widget class="QLabel" name="label_81">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>초</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QLineEdit" name="line_preWaitTime">
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 255, 255);</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="2">
+        <widget class="QLabel" name="label_84">
+         <property name="font">
+          <font>
+           <family>한컴 고딕</family>
+          </font>
+         </property>
+         <property name="text">
+          <string>초</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </widget>
+    <zorder>group_outerSetting</zorder>
+    <zorder>groupBox_11</zorder>
+    <zorder>groupBox_preTest</zorder>
+    <zorder>groupBox_7</zorder>
    </widget>
    <widget class="QGroupBox" name="groupBox_12">
     <property name="geometry">
      <rect>
       <x>270</x>
-      <y>349</y>
+      <y>480</y>
       <width>231</width>
-      <height>95</height>
+      <height>131</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -2957,7 +3055,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>11</x>
-       <y>25</y>
+       <y>55</y>
        <width>71</width>
        <height>21</height>
       </rect>
@@ -2975,8 +3073,8 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>103</x>
-       <y>2</y>
-       <width>121</width>
+       <y>7</y>
+       <width>111</width>
        <height>20</height>
       </rect>
      </property>
@@ -2999,7 +3097,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>211</x>
-       <y>25</y>
+       <y>53</y>
        <width>11</width>
        <height>20</height>
       </rect>
@@ -3017,7 +3115,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>169</x>
-       <y>25</y>
+       <y>55</y>
        <width>40</width>
        <height>20</height>
       </rect>
@@ -3041,7 +3139,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>11</x>
-       <y>3</y>
+       <y>8</y>
        <width>91</width>
        <height>21</height>
       </rect>
@@ -3059,7 +3157,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>145</x>
-       <y>25</y>
+       <y>55</y>
        <width>21</width>
        <height>20</height>
       </rect>
@@ -3077,7 +3175,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>103</x>
-       <y>25</y>
+       <y>55</y>
        <width>40</width>
        <height>20</height>
       </rect>
@@ -3101,7 +3199,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>211</x>
-       <y>48</y>
+       <y>76</y>
        <width>11</width>
        <height>20</height>
       </rect>
@@ -3119,7 +3217,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>145</x>
-       <y>48</y>
+       <y>78</y>
        <width>21</width>
        <height>20</height>
       </rect>
@@ -3137,7 +3235,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>169</x>
-       <y>48</y>
+       <y>78</y>
        <width>40</width>
        <height>20</height>
       </rect>
@@ -3161,7 +3259,7 @@ QPushButton:hover {
      <property name="geometry">
       <rect>
        <x>103</x>
-       <y>48</y>
+       <y>78</y>
        <width>40</width>
        <height>20</height>
       </rect>
@@ -3184,8 +3282,8 @@ QPushButton:hover {
     <widget class="QLabel" name="label_29">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>48</y>
+       <x>11</x>
+       <y>78</y>
        <width>71</width>
        <height>21</height>
       </rect>
@@ -3202,8 +3300,8 @@ QPushButton:hover {
     <widget class="QLabel" name="label_70">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>72</y>
+       <x>11</x>
+       <y>102</y>
        <width>91</width>
        <height>21</height>
       </rect>
@@ -3220,9 +3318,93 @@ QPushButton:hover {
     <widget class="QLineEdit" name="line_remainTime">
      <property name="geometry">
       <rect>
-       <x>163</x>
-       <y>70</y>
+       <x>169</x>
+       <y>102</y>
+       <width>45</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="line_currentMode">
+     <property name="geometry">
+      <rect>
+       <x>103</x>
+       <y>102</y>
        <width>61</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_71">
+     <property name="geometry">
+      <rect>
+       <x>211</x>
+       <y>31</y>
+       <width>11</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+      </font>
+     </property>
+     <property name="text">
+      <string>회</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_72">
+     <property name="geometry">
+      <rect>
+       <x>11</x>
+       <y>31</y>
+       <width>71</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+      </font>
+     </property>
+     <property name="text">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Pre Cycle&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="line_remainPreCycle">
+     <property name="geometry">
+      <rect>
+       <x>169</x>
+       <y>31</y>
+       <width>40</width>
        <height>20</height>
       </rect>
      </property>
@@ -3241,12 +3423,12 @@ QPushButton:hover {
       <bool>true</bool>
      </property>
     </widget>
-    <widget class="QLineEdit" name="line_currentMode">
+    <widget class="QLineEdit" name="line_currentPreCycle">
      <property name="geometry">
       <rect>
        <x>103</x>
-       <y>70</y>
-       <width>55</width>
+       <y>31</y>
+       <width>40</width>
        <height>20</height>
       </rect>
      </property>
@@ -3263,6 +3445,24 @@ QPushButton:hover {
      </property>
      <property name="readOnly">
       <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_73">
+     <property name="geometry">
+      <rect>
+       <x>145</x>
+       <y>31</y>
+       <width>21</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>한컴 고딕</family>
+      </font>
+     </property>
+     <property name="text">
+      <string>회 /</string>
      </property>
     </widget>
    </widget>
@@ -3415,15 +3615,41 @@ QPushButton:hover {
    <widget class="QTabWidget" name="tabWidget_3">
     <property name="geometry">
      <rect>
-      <x>630</x>
+      <x>510</x>
       <y>450</y>
-      <width>361</width>
+      <width>481</width>
       <height>171</height>
      </rect>
     </property>
     <property name="currentIndex">
      <number>0</number>
     </property>
+    <widget class="QWidget" name="tab_3">
+     <attribute name="title">
+      <string>SYS Log</string>
+     </attribute>
+     <widget class="QTextEdit" name="txtEdit_sysLog">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>471</width>
+        <height>141</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <family>한컴 고딕</family>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="readOnly">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </widget>
     <widget class="QWidget" name="tab_5">
      <attribute name="title">
       <string>CAN Log</string>
@@ -3433,7 +3659,7 @@ QPushButton:hover {
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>351</width>
+        <width>471</width>
         <height>141</height>
        </rect>
       </property>
@@ -3452,14 +3678,14 @@ QPushButton:hover {
     </widget>
     <widget class="QWidget" name="tab_6">
      <attribute name="title">
-      <string>Critical Log</string>
+      <string>CRI Log</string>
      </attribute>
      <widget class="QTextEdit" name="txtEdit_criLog">
       <property name="geometry">
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>351</width>
+        <width>471</width>
         <height>141</height>
        </rect>
       </property>
@@ -3480,7 +3706,6 @@ QPushButton:hover {
    <zorder>tabWidget</zorder>
    <zorder>frame_top</zorder>
    <zorder>groupBox_2</zorder>
-   <zorder>tabWidget_2</zorder>
    <zorder>group_customModeSetting</zorder>
    <zorder>groupBox_12</zorder>
    <zorder>groupBox</zorder>
@@ -3522,23 +3747,43 @@ QPushButton:hover {
   <tabstop>btn_stop</tabstop>
   <tabstop>btn_unlock</tabstop>
   <tabstop>checkBox_InnerMode</tabstop>
+  <tabstop>checkBox_preTestMode</tabstop>
+  <tabstop>line_preOnTime</tabstop>
+  <tabstop>line_preOffTime</tabstop>
+  <tabstop>line_numPreCycle</tabstop>
+  <tabstop>line_preWaitTime</tabstop>
+  <tabstop>line_totalPreCycleTime</tabstop>
   <tabstop>line_innerOnTime</tabstop>
   <tabstop>line_innerOffTime</tabstop>
   <tabstop>line_numInnerCycle</tabstop>
+  <tabstop>line_totalInnerCycleTime</tabstop>
   <tabstop>line_outerOffTime</tabstop>
   <tabstop>line_numOuterCycle</tabstop>
-  <tabstop>btn_clearCycleSetting</tabstop>
-  <tabstop>line_totalInnerCycleTime</tabstop>
   <tabstop>line_totalOuterCycleTime</tabstop>
   <tabstop>line_totalTestTime</tabstop>
+  <tabstop>line_currentPreCycle</tabstop>
+  <tabstop>line_remainPreCycle</tabstop>
   <tabstop>line_currentCycle</tabstop>
   <tabstop>line_remainCycle</tabstop>
-  <tabstop>tabWidget_2</tabstop>
-  <tabstop>txtEdit_sysLog</tabstop>
+  <tabstop>line_currentOutCycle</tabstop>
+  <tabstop>line_remainOutCycle</tabstop>
+  <tabstop>line_currentMode</tabstop>
+  <tabstop>line_remainTime</tabstop>
   <tabstop>tabWidget</tabstop>
   <tabstop>line_radar1</tabstop>
   <tabstop>line_radar2</tabstop>
   <tabstop>line_radar3</tabstop>
+  <tabstop>tabWidget_3</tabstop>
+  <tabstop>txtEdit_sysLog</tabstop>
+  <tabstop>btn_R1_preRqst</tabstop>
+  <tabstop>btn_R2_preRqst</tabstop>
+  <tabstop>btn_R3_preRqst</tabstop>
+  <tabstop>btn_clearCycleSetting</tabstop>
+  <tabstop>btn_clearSysLog</tabstop>
+  <tabstop>btn_clearCanLog</tabstop>
+  <tabstop>btn_clearCriLog</tabstop>
+  <tabstop>txtEdit_criLog</tabstop>
+  <tabstop>txtEdit_canLog</tabstop>
  </tabstops>
  <resources>
   <include location="SRC_Qt5/img_source.qrc"/>

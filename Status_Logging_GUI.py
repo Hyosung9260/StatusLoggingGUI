@@ -1,6 +1,6 @@
+import os
+import csv
 import sys
-import time
-import json
 import logging
 import datetime
 import numpy as np
@@ -16,23 +16,23 @@ from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QMessageBox, QFileDialog
 from PyQt5.QtCore import QTimer, QTime, QThread, Qt, pyqtSignal, QObject, QEventLoop, pyqtSlot
 
-update_date = "25.04.15"
-version = "version 0.1.1"
+update_date = "25.04.16"
+version = "version 1.0.0"
 '''
-# NOTE Ver_0.1.1
-1. 전원 OFF -> ON 후에도 Power/Temp 정상 출력되도록 수정
-2. 자동모드의 경우 Test mode 별 cycle time programming 매칭 완료
-3. 한 cycle 내에 한 번이라도 Power/Temp 데이터를 출력하지 않을시 critical log 출력 및 저장되도록 수정
-    > On time 내에 연결된 레이더가 정상적인 동작을 했는지 한 눈에 확인 가능
+# NOTE Ver_1.0.0
+1. Pre test mode 기능 수정
+    > Pre ON/OFF/Num cycle/Wait 기능 추가
+2. Log file 구조 변경
+    > Log file이 저장될 폴더가 존재하지 않는경우 자동으로 생성
+    > System log, CAN log, Data log 3가지로 구분
+    > Data log의 경우 Radar1, Radar2, Radar3 3개 장치 각각 저장되도록 구현
+    > Data log는 csv 확장으로 저장되도록 변경
+3. 최초 배포버전
+    > 실행파일 생성 및 윈도우 환경 데스크탑에서 정상 동작 확인
 
 # TODO
-1. Test mode setting 예외처리 
-    > 진동내구시험2 : 15 → 8 → 1 → 15 → 8 → 1 ==> 15 → 8 → 16 → 8 → 16 ...으로 처음 1번만 15h 추가
-2. Start 버튼 클릭 시 Test setting overview 로그 출력 (현재 모드, 프로그래밍 세팅, 전체 소요시간)
-3. 로그파일 저장 경로에 폴더가 없으면 폴더를 생성하는 기능 추가
-4. 로그파일을 .csv 확장으로 저장하는 기능 추가
-
 * 엑셀에서 테스트 모드 데이터 로드하는 방안 강구
+* 실행파일 생성 : pyinstaller --onefile --noconsole --add-data "Status_Logging_GUI.ui;." Status_Logging_GUI.py
 '''
 
 # Style Sheet Preset
@@ -174,7 +174,7 @@ class CANWriteWorker(QObject):
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre1)
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre2)
         error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre3)
-        print(f"dev_id : {dev_id}, pcan_handle : {self.pcan_handle_dict[dev_id]}")
+        # print(f"dev_id : {dev_id}, pcan_handle : {self.pcan_handle_dict[dev_id]}")
         if error_ok == PCAN_ERROR_OK:
             pass
         else:
@@ -691,28 +691,28 @@ class CANReadWorker(QObject):
 
             if self.flag_door_test:
                 if self.count_FL_pre_request > 2:
-                    self.log_signal.emit(0, "[READ] FL pre resend request")
+                    # self.log_signal.emit(0, "[READ] FL pre resend request")
                     self.resend_signal.emit(111)
                     self.count_FL_pre_request = 0
                 elif self.count_FR_pre_request > 2:
-                    self.log_signal.emit(0, "[READ] FR pre resend request")
+                    # self.log_signal.emit(0, "[READ] FR pre resend request")
                     self.resend_signal.emit(222)
                     self.count_FR_pre_request = 0
                 elif self.count_RR_pre_request > 2:
-                    self.log_signal.emit(0, "[READ] RR pre resend request")
+                    # self.log_signal.emit(0, "[READ] RR pre resend request")
                     self.resend_signal.emit(333)
                     self.count_RR_pre_request = 0
             else:   # Tailgate test
                 if self.count_TG_pre_request > 2 and self.dev_id == 0:
-                    self.log_signal.emit(0, f"[READ] TG#1 pre resend request")
+                    # self.log_signal.emit(0, f"[READ] TG#1 pre resend request")
                     self.resend_signal.emit(444)
                     self.count_TG_pre_request = 0
                 elif self.count_TG_pre_request > 2 and self.dev_id == 1:
-                    self.log_signal.emit(0, f"[READ] TG#2 pre resend request")
+                    # self.log_signal.emit(0, f"[READ] TG#2 pre resend request")
                     self.resend_signal.emit(555)
                     self.count_TG_pre_request = 0
                 elif self.count_TG_pre_request > 2 and self.dev_id == 2:
-                    self.log_signal.emit(0, f"[READ] TG#3 pre resend request")
+                    # self.log_signal.emit(0, f"[READ] TG#3 pre resend request")
                     self.resend_signal.emit(666)
                     self.count_TG_pre_request = 0
         
@@ -731,13 +731,36 @@ class CANReadWorker(QObject):
 class StatusGUI(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        uic.loadUi("Status_Logging_GUI.ui", self)   # Load GUI file
+        # uic.loadUi("Status_Logging_GUI.ui", self)
+        
+        # Set fixed UI path for exe file
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.abspath(".")
+
+        ui_path = os.path.join(base_path, "Status_Logging_GUI.ui")
+        uic.loadUi(ui_path, self)
+
+        # Check logfile path, if there is no directory, generate new folder
+        self.data_logfolder_path = "./LogFiles/DataLog"
+        if not os.path.exists(self.data_logfolder_path):
+            os.makedirs(self.data_logfolder_path)
+
+        self.can_logfolder_path = "./LogFiles/CanLog"
+        if not os.path.exists(self.can_logfolder_path):
+            os.makedirs(self.can_logfolder_path)
+
+        self.sys_logfolder_path = "./LogFiles/SysLog"
+        if not os.path.exists(self.sys_logfolder_path):
+            os.makedirs(self.sys_logfolder_path)
+
         self.init_ui()      # Initialize
         self.thread_list = []   # Only for thread managing
         self.read_worker_dict = {}
         self.write_worker = None
         self.crnt_val = None
-        
+
         # Timer setting
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_time)
@@ -756,37 +779,41 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.flag_start = False
         self.flag_lock = False
         self.flag_innerCycle = True
-        self.flag_innerOnTime = True
+        self.flag_inner_on_time = True
         self.flag_work_outer_cycle = False
         self.flag_saveSyslog = True
         self.flag_door_test = True
         self.flag_test_finished = False
         self.flag_on = False
-        self.flag_preTest = False
-        self.flag_preOn = True
-        self.flag_pre_test_finished = False
+        self.flag_pre_wait = False
         self.manualMode = True
-        
+        self.flag_preTest = False
+        self.flag_pre_on = True
+        self.flag_pre_test_finished = False        
         
         # Initialize variables
         self.connected_dev_id = []
         self.pcan_handle_dict = {}
         self.connected_dev_dict = {1:0, 2:0, 3:0}
         self.operation_timer = 0
-        self.innerOnTime = 0
-        self.innerOffTime = 0
-        self.numInnerCycle = 0
-        self.outerOffTime = 0
+        self.pre_on_time = 0
+        self.pre_off_time = 0
+        self.inner_on_time = 0
+        self.inner_off_time = 0
+        self.num_pre_cycle = 0
+        self.num_inner_cycle = 0
         self.numOuterCycle = 0
-        self.crntInnerCycle = 0
+        self.outerOffTime = 0
+        self.crnt_pre_cycle = 0
+        self.crnt_inner_cycle = 0
         self.crntOuterCycle = 0
+        self.pre_test_timer = 0
         self.inner_cycle_timer = 0
         self.outer_cycle_timer = 0
         self.totalTestTime = 0
-        self.pre_test_timer = 0
+        self.total_time_pre = 0
         self.total_time_inner = 0
         self.total_time_outer = 0
-        self.preTestTime = 0
         self.max_logFile_size = 10*1024*1024
 
         # Initial font setting
@@ -801,7 +828,6 @@ class StatusGUI(QtWidgets.QMainWindow):
 
         # Initialize system related buttons/labels
         self.cmb_modeSelection.currentIndexChanged.connect(self.func_modeSelection)
-        self.cmb_preTest.currentIndexChanged.connect(self.func_preTest)
         self.checkBox_InnerMode.stateChanged.connect(self.toggle_test_mode_setting)
         self.checkBox_preTestMode.stateChanged.connect(self.toggle_pre_test_mode_setting)
 
@@ -824,14 +850,17 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.btn_R3_preRqst.clicked.connect(self.send_pre_rqst3)
 
         self.line_logFileName.setText(self.cmb_modeSelection.currentText() + f"_{self.select_date}_{select_time}")
-        self.line_logFilePath.setText("./LogFiles")
-        self.line_sysLogFilePath.setText("./LogFiles/SysLog")
+        self.line_logFilePath.setText(self.can_logfolder_path)
+        self.line_sysLogFilePath.setText(self.sys_logfolder_path)
         self.line_innerOnTime.textChanged.connect(self.update_test_setting)
         self.line_innerOffTime.textChanged.connect(self.update_test_setting)
         self.line_numInnerCycle.textChanged.connect(self.update_test_setting)
         self.line_outerOffTime.textChanged.connect(self.update_test_setting)
         self.line_numOuterCycle.textChanged.connect(self.update_test_setting)
-        self.line_preTestTime.textChanged.connect(self.update_test_setting)
+        self.line_preOnTime.textChanged.connect(self.update_test_setting)
+        self.line_preOffTime.textChanged.connect(self.update_test_setting)
+        self.line_numPreCycle.textChanged.connect(self.update_test_setting)
+        self.line_preWaitTime.textChanged.connect(self.update_test_setting)
 
         self.radioBtn_door.toggled.connect(self.update_num_dev)
         self.radioBtn_tailgate.toggled.connect(self.update_num_dev)
@@ -980,52 +1009,129 @@ class StatusGUI(QtWidgets.QMainWindow):
         # self.lab_Rdr3_txPwr3.setText("0")
         # self.lab_Rdr3_tmp.setText("0")
 
+    def get_label_value(self, label: QtWidgets.QLabel) -> float:
+        data = label.text()
+        try:
+            return float(data)
+        except ValueError:
+            return 0
+        
+    def save_csv_data(self):
+        current_time = QTime.currentTime().toString("hh:mm:ss")
+        r1_tx0 = self.get_label_value(self.lab_Rdr1_txPwr1)
+        r1_tx1 = self.get_label_value(self.lab_Rdr1_txPwr2)
+        r1_tx2 = self.get_label_value(self.lab_Rdr1_txPwr2)
+        r1_temp = self.get_label_value(self.lab_Rdr1_tmp)
+        r2_tx0 = self.get_label_value(self.lab_Rdr2_txPwr1)
+        r2_tx1 = self.get_label_value(self.lab_Rdr2_txPwr2)
+        r2_tx2 = self.get_label_value(self.lab_Rdr2_txPwr3)
+        r2_temp = self.get_label_value(self.lab_Rdr2_tmp)
+        r3_tx0 = self.get_label_value(self.lab_Rdr3_txPwr1)
+        r3_tx1 = self.get_label_value(self.lab_Rdr3_txPwr2)
+        r3_tx2 = self.get_label_value(self.lab_Rdr3_txPwr3)
+        r3_temp = self.get_label_value(self.lab_Rdr3_tmp)
+
+        r1_row = [current_time, r1_tx0, r1_tx1, r1_tx2, r1_temp]
+        r2_row = [current_time, r2_tx0, r2_tx1, r2_tx2, r2_temp]
+        r3_row = [current_time, r3_tx0, r3_tx1, r3_tx2, r3_temp]
+
+        with open(self.Radar1_data_csv_path, "a", newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            writer.writerow(r1_row)
+        with open(self.Radar2_data_csv_path, "a", newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            writer.writerow(r2_row)
+        with open(self.Radar3_data_csv_path, "a", newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            writer.writerow(r3_row)
+
     def preTest_work(self):
-        if self.pre_test_timer < self.preTestTime - 1:
-            self.pre_test_timer += 1
-            self.line_remainTime.setText(f"{self.preTestTime - self.pre_test_timer}")
-            if self.flag_preOn:
-                self.line_currentMode.setText("PreOn")
+        if not self.flag_pre_wait:
+            if self.flag_pre_on:
+                if self.pre_test_timer < self.pre_on_time - 1:
+                    self.line_remainTime.setText(f"{self.pre_on_time - self.pre_test_timer}")
+                    self.line_currentMode.setText("PreOn")
+                    self.pre_test_timer += 1
+                else:
+                    self.pre_test_timer = 0
+                    self.line_remainTime.setText("1")
+                    self.flag_on = False
+                    self.func_emit_onOffStatus(self.flag_on)
+                    self.flag_pre_on = False
             else:
-                self.line_currentMode.setText("PreOff")
+                if self.pre_test_timer < self.pre_off_time - 1:
+                    self.line_remainTime.setText(f"{self.pre_off_time - self.pre_test_timer}")
+                    self.line_currentMode.setText("PreOff")
+                    self.pre_test_timer += 1
+                else:
+                    self.pre_test_timer = 0
+                    self.crnt_pre_cycle += 1
+                    self.line_remainTime.setText("1")
+
+                    # Update current/remain cycle in GUI
+                    self.line_currentPreCycle.setText(f"{self.crnt_pre_cycle}")
+                    self.line_remainPreCycle.setText(f"{self.num_pre_cycle-self.crnt_pre_cycle}")
+
+                    if self.crnt_pre_cycle < self.num_pre_cycle:
+                        self.flag_on = True
+                        self.func_emit_onOffStatus(self.flag_on)
+                        self.flag_pre_on = True
+                        self.print_log(0, f"[MAIN] Current Pre Cycle : {self.crnt_pre_cycle} / Total Pre Cycle : {self.num_pre_cycle}")
+                    else:
+                        self.crnt_pre_cycle = 0
+                        if self.pre_wait_time:
+                            self.flag_pre_wait = True
+                        else:
+                            self.flag_on = True
+                            self.func_emit_onOffStatus(self.flag_on)
+                            self.flag_pre_test_finished = True
         else:
-            self.pre_test_timer = 0
-            self.line_remainTime.setText("0")
-            self.flag_pre_test_finished = True            
+            if self.pre_test_timer < self.pre_wait_time - 1:
+                self.line_remainTime.setText(f"{self.pre_wait_time - self.pre_test_timer}")
+                self.line_currentMode.setText("PreWait")
+                self.pre_test_timer += 1
+            else:
+                self.pre_test_timer = 0
+                self.line_remainTime.setText("1")
+                self.flag_on = True
+                self.func_emit_onOffStatus(self.flag_on)
+                self.flag_pre_on = True
+                self.flag_pre_wait = False
+                self.flag_pre_test_finished = True
 
     def inner_cycle_work(self):
-        if self.flag_innerOnTime:
-            if self.inner_cycle_timer < self.innerOnTime - 1:
-                self.inner_cycle_timer += 1
-                self.line_remainTime.setText(f"{self.innerOnTime - self.inner_cycle_timer}")
+        if self.flag_inner_on_time:
+            if self.inner_cycle_timer < self.inner_on_time - 1:
+                self.line_remainTime.setText(f"{self.inner_on_time - self.inner_cycle_timer}")
                 self.line_currentMode.setText("InOn")
+                self.inner_cycle_timer += 1
             else:                
                 self.inner_cycle_timer = 0
-                self.line_remainTime.setText("0")
+                self.line_remainTime.setText("1")
                 self.flag_on = False
                 self.func_emit_onOffStatus(self.flag_on)
-                self.flag_innerOnTime = False
+                self.flag_inner_on_time = False
         else:
-            if self.inner_cycle_timer < self.innerOffTime - 1:
-                self.inner_cycle_timer += 1
-                self.line_remainTime.setText(f"{self.innerOffTime - self.inner_cycle_timer}")
+            if self.inner_cycle_timer < self.inner_off_time - 1:
+                self.line_remainTime.setText(f"{self.inner_off_time - self.inner_cycle_timer}")
                 self.line_currentMode.setText("InOff")
+                self.inner_cycle_timer += 1
             else:
                 self.inner_cycle_timer = 0
-                self.crntInnerCycle += 1
-                self.line_remainTime.setText("0")
+                self.crnt_inner_cycle += 1
+                self.line_remainTime.setText("1")
                 
                 # Update current/remain cycle in GUI
-                self.line_currentCycle.setText(f"{self.crntInnerCycle}")
-                self.line_remainCycle.setText(f"{self.numInnerCycle-self.crntInnerCycle}")
+                self.line_currentCycle.setText(f"{self.crnt_inner_cycle}")
+                self.line_remainCycle.setText(f"{self.num_inner_cycle-self.crnt_inner_cycle}")
 
-                if self.crntInnerCycle < self.numInnerCycle:
+                if self.crnt_inner_cycle < self.num_inner_cycle:
                     self.flag_on = True
                     self.func_emit_onOffStatus(self.flag_on)
-                    self.flag_innerOnTime = True
-                    self.print_log(0, f"[MAIN] Current Inner Cycle : {self.crntInnerCycle} / Total Inner Cycle : {self.numInnerCycle}")
+                    self.flag_inner_on_time = True
+                    self.print_log(0, f"[MAIN] Current Inner Cycle : {self.crnt_inner_cycle} / Total Inner Cycle : {self.num_inner_cycle}")
                 else:                    
-                    self.crntInnerCycle = 0
+                    self.crnt_inner_cycle = 0
                     if self.flag_innerCycle:
                         self.flag_test_finished = True
                         self.print_log(0, "[MAIN] Test completed")
@@ -1045,7 +1151,7 @@ class StatusGUI(QtWidgets.QMainWindow):
             else:
                 self.outer_cycle_timer = 0
                 self.crntOuterCycle += 1
-                self.line_remainTime.setText("0")
+                self.line_remainTime.setText("1")
                 self.flag_work_outer_cycle = False
 
                 # Update current/remain cycle in GUI
@@ -1054,7 +1160,7 @@ class StatusGUI(QtWidgets.QMainWindow):
 
                 if self.crntOuterCycle < self.numOuterCycle:
                     self.flag_on = True
-                    self.flag_innerOnTime = True
+                    self.flag_inner_on_time = True
                     self.func_emit_onOffStatus(self.flag_on)
                     self.print_log(0, f"[MAIN] Current Outer Cycle : {self.crntOuterCycle} / Total Outer Cycle : {self.numOuterCycle}")
                 else:
@@ -1091,6 +1197,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.progressBar.setValue(progressVal)
             self.update_operation_display()
             self.cycle_counter()
+            self.save_csv_data()
 
         date = datetime.datetime.now()
         crnt_date = (f'{date.year}년 {date.month}월 {date.day}일')
@@ -1115,19 +1222,30 @@ class StatusGUI(QtWidgets.QMainWindow):
             self.flag_preTest = False
 
     def update_test_setting(self):
+        if self.flag_preTest:
+            try:    # If input value is not integer, consider 0
+                self.pre_on_time = int(self.line_preOnTime.text()) if self.line_preOnTime.text().isdigit() else 0
+                self.pre_off_time = int(self.line_preOffTime.text()) if self.line_preOffTime.text().isdigit() else 0
+                self.num_pre_cycle = int(self.line_numPreCycle.text()) if self.line_numPreCycle.text().isdigit() else 0
+                self.pre_wait_time = int(self.line_preWaitTime.text()) if self.line_preWaitTime.text().isdigit() else 0
+
+                # Update result to line_totalInnerCycleTime
+                self.total_time_pre = ((self.pre_on_time + self.pre_off_time) * self.num_pre_cycle) + self.pre_wait_time
+                self.line_totalPreCycleTime.setText(str(self.total_time_pre))
+
+            except ValueError:  # If occur exclude case, consider 0
+                self.line_totalPreCycleTime.setText("0")
+                
         try:
-            # If input value is not integer, consider 0
-            self.innerOnTime = int(self.line_innerOnTime.text()) if self.line_innerOnTime.text().isdigit() else 0
-            self.innerOffTime = int(self.line_innerOffTime.text()) if self.line_innerOffTime.text().isdigit() else 0
-            self.numInnerCycle = int(self.line_numInnerCycle.text()) if self.line_numInnerCycle.text().isdigit() else 0
+            self.inner_on_time = int(self.line_innerOnTime.text()) if self.line_innerOnTime.text().isdigit() else 0
+            self.inner_off_time = int(self.line_innerOffTime.text()) if self.line_innerOffTime.text().isdigit() else 0
+            self.num_inner_cycle = int(self.line_numInnerCycle.text()) if self.line_numInnerCycle.text().isdigit() else 0            
             
-            
-            # Update result to line_totalInnerCycleTime
-            self.total_time_inner = (self.innerOnTime + self.innerOffTime) * self.numInnerCycle
+            self.total_time_inner = (self.inner_on_time + self.inner_off_time) * self.num_inner_cycle
             self.line_totalInnerCycleTime.setText(str(self.total_time_inner))
-            
+
             if self.flag_preTest:
-                self.total_time_inner += self.preTestTime
+                self.total_time_inner += self.total_time_pre
 
             hours = self.total_time_inner // 3600
             mins = (self.total_time_inner % 3600) // 60
@@ -1135,7 +1253,7 @@ class StatusGUI(QtWidgets.QMainWindow):
             self.line_totalTestTime.setText(f"{hours}시간 {mins}분 {secs}초")
 
             self.totalTestTime = self.total_time_inner
-        # If occur exclude case, consider 0
+        
         except ValueError:
             self.line_totalInnerCycleTime.setText("0")
         
@@ -1146,9 +1264,9 @@ class StatusGUI(QtWidgets.QMainWindow):
 
                 self.total_time_outer = (self.total_time_inner + self.outerOffTime) * self.numOuterCycle
                 self.line_totalOuterCycleTime.setText(str(self.total_time_outer))
-                
+
                 if self.flag_preTest:
-                    self.total_time_outer += self.preTestTime
+                    self.total_time_outer += self.total_time_pre
 
                 hours = self.total_time_outer // 3600
                 mins = (self.total_time_outer % 3600) // 60
@@ -1159,13 +1277,12 @@ class StatusGUI(QtWidgets.QMainWindow):
             except ValueError:
                 self.line_totalOuterCycleTime.setText("0")
 
-        if self.flag_preTest:
-            try:
-                self.preTestTime = int(self.line_preTestTime.text()) if self.line_preTestTime.text().isdigit() else 0
-            except ValueError:
-                self.line_preTestTime.setText("0")
-
     def clear_cycle_setting(self):
+        if self.flag_preTest:
+            self.line_preOnTime.setText("")
+            self.line_preOffTime.setText("")
+            self.line_numPreCycle.setText("")
+            self.line_preWaitTime.setText("")
         if self.flag_innerCycle:
             self.line_innerOnTime.setText("")
             self.line_innerOffTime.setText("")
@@ -1298,97 +1415,6 @@ class StatusGUI(QtWidgets.QMainWindow):
             else:       # Failed
                 self.btn_device3.toggle()
 
-    '''def send_act_sequence(self, pcan_handle):
-        self.pcan_ctrl.send_actSensor(pcan_handle, self.flag_door_test)
-        
-    def send_deact_sequence(self, pcan_handle):
-        self.pcan_ctrl.send_deactSensor(pcan_handle, self.flag_door_test)
-    
-    def confirm_msg_id(self, pcan_handle, receive_event):
-        num_radar_dev = 0
-        
-        if self.flag_door_test:
-            for count in range(10):
-                _, _, recv_msg_id = self.pcan_ctrl.read_unit_buf(m_PCANHandle=pcan_handle,recv_event=receive_event,wait_time=1000,output_mode='numpy',evt_mode=False)
-                # print(f"recv_msg_id : {recv_msg_id}")
-                if str(hex(recv_msg_id)) in DOOR_RCV_MSG_ID_FL:
-                    # Print system log
-                    sysLogMsg = "Radar connected : CAN ID " + str(self.connected_dev_id[0]) + "_FL"
-                    self.print_log(0, sysLogMsg)
-                    num_radar_dev += 1
-                    if num_radar_dev > 3:
-                        break
-                elif str(hex(recv_msg_id)) in DOOR_RCV_MSG_ID_FR:
-                    # Print system log
-                    sysLogMsg = "Radar connected : CAN ID " + str(self.connected_dev_id[0]) + "_FR"
-                    self.print_log(0, sysLogMsg)
-                    num_radar_dev += 1
-                    if num_radar_dev > 3:
-                        break
-                elif str(hex(recv_msg_id)) in DOOR_RCV_MSG_ID_RL:
-                    # Print system log
-                    sysLogMsg = "Radar connected : CAN ID " + str(self.connected_dev_id[0]) + "_RL"
-                    self.print_log(0, sysLogMsg)
-                    num_radar_dev += 1
-                    if num_radar_dev > 3:
-                        break
-                elif str(hex(recv_msg_id)) in DOOR_RCV_MSG_ID_RR:
-                    # Print system log
-                    sysLogMsg = "Radar connected : CAN ID " + str(self.connected_dev_id[0]) + "_RR"
-                    self.print_log(0, sysLogMsg)
-                    num_radar_dev += 1
-                    if num_radar_dev > 3:
-                        break
-                QThread.msleep(100)  # CPU 점유율 방지
-
-        else:   # Talegate test
-            flag_findDev = 0
-            while (True):
-            # for count in range(10):
-                _, _, recv_msg_id = self.pcan_ctrl.read_unit_buf(m_PCANHandle=pcan_handle,recv_event=receive_event,wait_time=1000,output_mode='numpy',evt_mode=False)
-                if flag_findDev == 0:
-                    if str(hex(recv_msg_id)) in TALEGATE_RCV_MSG_ID:
-                        # Print system log
-                        sysLogMsg = "Radar connected : CAN ID " + str(self.connected_dev_id) + "_TG"
-                        self.print_log(0, sysLogMsg)
-                        flag_findDev = 1
-                        # break
-                else:
-                    pass
-
-                # QThread.msleep(0.1)  # CPU 점유율 방지
-
-    def can_connection_check(self):
-        if self.flag_door_test:
-            if self.btn_device1.isChecked():
-                _, pcan_handle = self.pcan_ctrl.get_handle_from_id(self.connected_dev_id[0])
-                _, receive_event = self.pcan_ctrl.InitializeEvent(Channel=pcan_handle)
-
-                self.send_act_sequence(pcan_handle)
-                QThread.msleep(500)
-                self.confirm_msg_id(pcan_handle, receive_event)
-                self.send_deact_sequence(pcan_handle)
-            else:
-                sysLogMsg = f"CAN device is not connected. Please check connection."
-                self.print_log(0, sysLogMsg)
-
-        else:   # Talegate test
-            if self.btn_device1.isChecked() or self.btn_device2.isChecked() or self.btn_device3.isChecked():
-                for dev_id in self.connected_dev_id:
-                    _, pcan_handle = self.pcan_ctrl.get_handle_from_id(dev_id)
-                    _, receive_event = self.pcan_ctrl.InitializeEvent(Channel=pcan_handle)
-
-                    self.send_act_sequence(pcan_handle)
-                    QThread.msleep(500)
-                    self.confirm_msg_id(pcan_handle, receive_event)
-                    self.send_deact_sequence(pcan_handle)
-                else:
-                    sysLogMsg = f"CAN device is not connected. Please check connection."
-                    self.print_log(0, sysLogMsg)
-            else:
-                sysLogMsg = f"CAN device is not connected. Please connect all the 3 devices."
-                self.print_log(0, sysLogMsg)'''
-
     def print_log(self, category, message):
         # Print log to the textEdit
         date = datetime.datetime.now()
@@ -1432,12 +1458,6 @@ class StatusGUI(QtWidgets.QMainWindow):
                 cri_cursor.select(cri_cursor.BlockUnderCursor)
                 cri_cursor.removeSelectedText()
             self.cri_logger.debug(message)
-
-    def func_preTest(self, index):
-        if index == 0:
-            self.flag_preOn = True
-        else:   # pre OFF time
-            self.flag_preOn = False
 
     def func_modeSelection(self, index):
         date = datetime.datetime.now()
@@ -1486,12 +1506,17 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.line_numInnerCycle.setText("30")
                 self.line_outerOffTime.setText("3000")
                 self.line_numOuterCycle.setText("1000")
-            # elif index == 21:
-                # self.line_innerOnTime.setText("8")
-                # self.line_innerOffTime.setText("12")
-                # self.line_numInnerCycle.setText("2700")
-                # self.line_outerOffTime.setText("28800")
-                # self.line_numOuterCycle.setText("1")
+            elif index == 21:
+                self.checkBox_preTestMode.setChecked(True)
+                self.line_preOnTime.setText("8")
+                self.line_preOffTime.setText("12")
+                self.line_numPreCycle.setText("2700")
+                self.line_preWaitTime.setText("28800")
+                self.line_innerOnTime.setText("8")
+                self.line_innerOffTime.setText("12")
+                self.line_numInnerCycle.setText("2880")
+                self.line_outerOffTime.setText("28800")
+                self.line_numOuterCycle.setText("10")
 
     def func_clearFileName(self):
         self.line_logFileName.setText("")
@@ -1627,11 +1652,36 @@ class StatusGUI(QtWidgets.QMainWindow):
                 # Process start
                 self.process_start()
 
+                # Generate initial csv file
+                if self.flag_door_test:
+                    self.Radar1_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "FL.csv")
+                    self.Radar2_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "FR.csv")
+                    self.Radar3_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "RR.csv")
+                else:   # Tailgate test
+                    self.Radar1_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "TG#1.csv")
+                    self.Radar2_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "TG#2.csv")
+                    self.Radar3_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "TG#3.csv")
+
+                if not os.path.exists(self.Radar1_data_csv_path):
+                    with open(self.Radar1_data_csv_path, "a", newline='', encoding='utf-8-sig') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(["Time", "Tx0", "Tx1", "Tx2", "Temperature"])
+                if not os.path.exists(self.Radar2_data_csv_path):
+                    with open(self.Radar2_data_csv_path, "a", newline='', encoding='utf-8-sig') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(["Time", "Tx0", "Tx1", "Tx2", "Temperature"])
+                if not os.path.exists(self.Radar3_data_csv_path):
+                    with open(self.Radar3_data_csv_path, "a", newline='', encoding='utf-8-sig') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(["Time", "Tx0", "Tx1", "Tx2", "Temperature"])
+
                 # Send ON signal
-                self.flag_on = True
-                if self.flag_preTest and not self.flag_preOn:
-                    pass
+                if self.flag_preTest and self.pre_on_time == 0:
+                    self.flag_pre_on = False
+                    self.flag_on = False
+                    self.func_emit_onOffStatus(self.flag_on)
                 else:
+                    self.flag_on = True
                     self.func_emit_onOffStatus(self.flag_on)
 
                 # Interlock Start/Stop/Unlock button
@@ -1649,8 +1699,11 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.lab_timer.show()
 
                 # Update current/remain cycle in GUI
-                self.line_currentCycle.setText(f"{self.crntInnerCycle}")
-                self.line_remainCycle.setText(f"{self.numInnerCycle}")
+                if self.flag_preTest:
+                    self.line_currentPreCycle.setText(f"{self.crnt_pre_cycle}")
+                    self.line_remainPreCycle.setText(f"{self.num_pre_cycle}")
+                self.line_currentCycle.setText(f"{self.crnt_inner_cycle}")
+                self.line_remainCycle.setText(f"{self.num_inner_cycle}")
                 if not self.flag_innerCycle:
                     self.line_currentOutCycle.setText(f"{self.crntOuterCycle}")
                     self.line_remainOutCycle.setText(f"{self.numOuterCycle}")
@@ -1664,18 +1717,18 @@ class StatusGUI(QtWidgets.QMainWindow):
                 # Save operation log
                 oper_logger_filename = self.line_logFilePath.text() + '/' + self.line_logFileName.text() + '.log'
                 self.oper_log_handler = logging.handlers.RotatingFileHandler(filename=oper_logger_filename, mode='a', maxBytes=self.max_logFile_size)
-                oper_formatter = logging.Formatter(fmt='%(asctime)s\t%(message)s')
-                self.oper_log_handler.setFormatter(oper_formatter)
                 self.oper_logger.addHandler(self.oper_log_handler)
                 self.oper_logger.debug("Data\tTime\tTx0\tTx1\tTx2\tTemperature")
+                oper_formatter = logging.Formatter(fmt='%(asctime)s\t%(message)s')
+                self.oper_log_handler.setFormatter(oper_formatter)
 
                 # Save critial log
                 cri_logger_filename = self.line_logFilePath.text() + '/' + self.line_logFileName.text() + '_crit.log'
                 self.cri_log_handler = logging.handlers.RotatingFileHandler(filename=cri_logger_filename, mode='a', maxBytes=self.max_logFile_size)
-                cri_formatter = logging.Formatter(fmt='%(asctime)s\t%(message)s')
-                self.cri_log_handler.setFormatter(cri_formatter)
                 self.cri_logger.addHandler(self.cri_log_handler)
                 self.cri_logger.debug("Data\tTime\tTx0\tTx1\tTx2\tTemperature")
+                cri_formatter = logging.Formatter(fmt='%(asctime)s\t%(message)s')
+                self.cri_log_handler.setFormatter(cri_formatter)
         else:
             reply = QMessageBox.question(self, "확인 메시지", "하나 이상의 CAN Device를 연결해주십시오.", QMessageBox.Yes)
                        

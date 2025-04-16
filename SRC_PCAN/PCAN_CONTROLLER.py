@@ -158,9 +158,9 @@ class PCANControl:
                     raise ValueError('\033[91m[Error] Error occured while sending the message "actSensor"\033[0m')
                 
         else:               # Talegate test
-            msg_id = TALEGATE_MSG_ID[0]
-            m_DLC = TALEGATE_DLC
-            msg_frame = TALEGATE_ACT
+            msg_id = TAILGATE_MSG_ID[0]
+            m_DLC = TAILGATE_DLC
+            msg_frame = TAILGATE_ACT
             error_ok = self.write_msg_frame(m_PCANHandle, msg_id, m_DLC, msg_frame)
         
             if error_ok == PCAN_ERROR_OK:
@@ -183,9 +183,9 @@ class PCANControl:
                     raise ValueError('\033[91m[Error] Error happens during operating "deactSensor"\033[0m')
                 
         else:               # Talegate test
-            msg_id = TALEGATE_MSG_ID[0]
-            m_DLC = TALEGATE_DLC
-            msg_frame = TALEGATE_ACT
+            msg_id = TAILGATE_MSG_ID[0]
+            m_DLC = TAILGATE_DLC
+            msg_frame = TAILGATE_ACT
             error_ok = self.write_msg_frame(m_PCANHandle, msg_id, m_DLC, msg_frame)
         
             if error_ok == PCAN_ERROR_OK:

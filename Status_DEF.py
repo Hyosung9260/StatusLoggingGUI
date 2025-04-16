@@ -6,12 +6,13 @@ FL = 0
 FR = 1
 RL = 2
 RR = 3
+TG = 4
 
 MAX_ERROR_COUNT     = 5
 CONFIRM_OFF_COUNT   = 10
 BITRATE             = "f_clock_mhz=40,nom_brp=1,nom_tseg1=63,nom_tseg2=16,nom_sjw=16,data_brp=2,data_tseg1=14,data_tseg2=5,data_sjw=4"
 DEV_ID_LIST         = ["0", "1", "2"]
-RECV_MSG_ID_LIST    = {0x1FF100A2: "FL", 0x1FF100A3: "FR", 0x1FF100A4: "RL", 0x1FF100A5: "RR"}
+RECV_MSG_ID_LIST    = {0x1FF100A2: "FL", 0x1FF100A3: "FR", 0x1FF100A4: "RL", 0x1FF100A5: "RR", 0x1FF11400: "TG"}
 
 TX_POWER_LIMIT      = [10, 14]
 TEMP_LIMIT          = [-40, 125]
@@ -30,12 +31,12 @@ DOOR_RCV_MSG_ID_FR  = ["0x123", "1234", "12345"]
 DOOR_RCV_MSG_ID_RL  = ["0x123", "1234", "12345"]
 DOOR_RCV_MSG_ID_RR  = ["0x123", "1234", "12345"]
 
-# Talegate test message preset
-TALEGATE_MSG_ID     = ["18060501", "1FF01400"]
-TALEGATE_DLC        = 8
-TALEGATE_ACT        = ["00", "00", "00", "00", "00", "01", "00", "00"]
-TALEGATE_DEACT      = ["00", "00", "00", "00", "00", "00", "00", "00"]
-TALEGATE_RCV_MSG_ID = ["0x547", "0x17c5f801", "0x17FC0014", "0x1FF11400"]
+# Tailgate test message preset
+TAILGATE_MSG_ID     = ["18060501", "1FF01400"]
+TAILGATE_DLC        = 8
+TAILGATE_ACT        = ["00", "00", "00", "00", "00", "01", "00", "00"]
+TAILGATE_DEACT      = ["00", "00", "00", "00", "00", "00", "00", "00"]
+TAILGATE_RCV_MSG_ID = ["0x547", "0x17c5f801", "0x17FC0014", "0x1FF11400"]
 
 # Common message preset
 RQST_PWR_TEMP       = ["30", "05", "00", "55", "55", "55", "55", "55"]
@@ -48,4 +49,4 @@ RQST_PWR_TEMP_PRE3  = ["03", "15", "02", "01", "55", "55", "55", "55"]
 # FR's recive MSG_ID → 
 # RL's recive MSG_ID → 
 # RR's recive MSG_ID → 
-# Talegate's recive MSG_ID → '0x547', '0x17C5F801', '0x17FC0014', '1FF11400(Temperature)'
+# Tailgate's recive MSG_ID → '0x547', '0x17C5F801', '0x17FC0014', '1FF11400(Temperature)'

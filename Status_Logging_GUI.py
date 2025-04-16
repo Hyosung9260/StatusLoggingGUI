@@ -16,24 +16,21 @@ from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QMessageBox, QFileDialog
 from PyQt5.QtCore import QTimer, QTime, QThread, Qt, pyqtSignal, QObject, QEventLoop, pyqtSlot
 
-update_date = "25.04.07"
+update_date = "25.04.15"
 version = "version 0.1.1"
 '''
 # NOTE Ver_0.1.1
 1. 전원 OFF -> ON 후에도 Power/Temp 정상 출력되도록 수정
-2. 
+2. 자동모드의 경우 Test mode 별 cycle time programming 매칭 완료
+3. 한 cycle 내에 한 번이라도 Power/Temp 데이터를 출력하지 않을시 critical log 출력 및 저장되도록 수정
+    > On time 내에 연결된 레이더가 정상적인 동작을 했는지 한 눈에 확인 가능
 
 # TODO
-- PCAN connect (CAN ID, Device ID)
-    > CAN ID 0, 1, 2에서 각각 유력한 Device ID 테이블의 각 리스트마다 연결되어 있는지를 확인, Device ID는 테일게이트면 모두 B0, FF면 D0 식으로 정의 → 별칭을 바로 출력하는 편의성 제공)
-    > Sleep 모드 표시
-- Test 모드 기입 (Test 모드 중 하나만 Mode setting 예외처리, 15 → 8 → 1 → 15 → 8 → 1 ==> 15 → 8 → 16 → 8 → 16 ...으로 처음 1번만 15h 추가)
-- Test 진행 중 Device OFF 상태에서 ON 상태로 들어가면 GUI에서 wake up(Active) 모드로 들어오도록 CAN 메시지 송신하도록 프로토콜 구현
-- 모드별 setting 기입 및 소요시간 출력
-- System log에 PCAN connection status 추가
-- Graph view 기능 추가 (QThread or Thread)
-- MOBED와 RODS 테스트모드 구분
-- 로그파일 저장 경로에 폴더가 없으면 폴더를 생성하는 기능 추가
+1. Test mode setting 예외처리 
+    > 진동내구시험2 : 15 → 8 → 1 → 15 → 8 → 1 ==> 15 → 8 → 16 → 8 → 16 ...으로 처음 1번만 15h 추가
+2. Start 버튼 클릭 시 Test setting overview 로그 출력 (현재 모드, 프로그래밍 세팅, 전체 소요시간)
+3. 로그파일 저장 경로에 폴더가 없으면 폴더를 생성하는 기능 추가
+4. 로그파일을 .csv 확장으로 저장하는 기능 추가
 
 * 엑셀에서 테스트 모드 데이터 로드하는 방안 강구
 '''
@@ -69,7 +66,7 @@ class CANWriteWorker(QObject):
     @pyqtSlot(bool)
     def write_act_deact(self, onOffStatus):
         if onOffStatus: # ON
-            self.write_act_msg(False, 0)
+            self.write_act_msg()
             QThread.msleep(150)
             self.write_pre_pwr_tmp_request()
 
@@ -80,14 +77,15 @@ class CANWriteWorker(QObject):
 
         else:           # OFF
             self.timer_tx_power.stop()
-            self.write_deact_msg(False, 0)
+            self.write_deact_msg()
             
             # Send act message to read thread
             for dev_id, worker in self.read_worker_dict.items():
                 worker.onOff_signal.emit(onOffStatus)
     
-    @pyqtSlot(int, bool)
-    def write_resend(self, dev_id, resend_act):
+    @pyqtSlot(int)
+    def write_resend(self, dev_id):
+        # Door test
         if dev_id == 0x1FF100A2:
             self.write_pwr_tmp_request(FL)
         elif dev_id == 0x1FF100A3:
@@ -95,64 +93,30 @@ class CANWriteWorker(QObject):
         elif dev_id == 0x1FF100A5:
             self.write_pwr_tmp_request(RR)
 
-        elif dev_id == 555:     # Write FL power/temp request message
-            msg_id = DOOR_FL_MSG_ID[1]
-            dlc = len(RQST_PWR_TEMP_PRE1)
-            msg_frame_pre1 = RQST_PWR_TEMP_PRE1
-            msg_frame_pre2 = RQST_PWR_TEMP_PRE2
-            msg_frame_pre3 = RQST_PWR_TEMP_PRE3
+        elif dev_id == 111:     # Write FL power/temp request message
+            self.write_FL_pre_request()
 
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre1)
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre2)
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre3)
-            if error_ok == PCAN_ERROR_OK:
-                pass
-            else:
-                self.log_signal.emit(0, "[ERROR] Power/Temp request failed : FL")
+        elif dev_id == 222:     # Write FR power/temp request message
+            self.write_FR_pre_request()
 
-        elif dev_id == 666:     # Write FR power/temp request message
-            msg_id = DOOR_FR_MSG_ID[1]
-            dlc = len(RQST_PWR_TEMP_PRE1)
-            msg_frame_pre1 = RQST_PWR_TEMP_PRE1
-            msg_frame_pre2 = RQST_PWR_TEMP_PRE2
-            msg_frame_pre3 = RQST_PWR_TEMP_PRE3
-
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre1)
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre2)
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre3)
-            if error_ok == PCAN_ERROR_OK:
-                pass
-            else:
-                self.log_signal.emit(0, "[ERROR] Power/Temp request failed : FR")
-
-        elif dev_id == 777:     # Write RR power/temp request message
-            msg_id = DOOR_RR_MSG_ID[1]
-            dlc = len(RQST_PWR_TEMP_PRE1)
-            msg_frame_pre1 = RQST_PWR_TEMP_PRE1
-            msg_frame_pre2 = RQST_PWR_TEMP_PRE2
-            msg_frame_pre3 = RQST_PWR_TEMP_PRE3
-
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre1)
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre2)
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id, dlc, msg_frame_pre3)
-            if error_ok == PCAN_ERROR_OK:
-                pass
-            else:
-                self.log_signal.emit(0, "[ERROR] Power/Temp request failed : RR")
-
-        else:
-            pcan_handle = self.pcan_handle_dict[dev_id]
-            if pcan_handle is None:
-                self.log_signal.emit(2, f"[WRITE] Invalid dev_id: {dev_id}")
-                return
-            if resend_act:
-                self.write_act_msg(True, dev_id)
-            else:
-                self.timer_tx_power.stop()
-                self.write_deact_msg(True, dev_id)
+        elif dev_id == 333:     # Write RR power/temp request message
+            self.write_RR_pre_request()
+        
+        # Tailgate test
+        elif dev_id in [0, 1, 2]:
+            self.write_pwr_tmp_request(dev_id)
+        
+        elif dev_id == 444:
+            self.write_TG_pre_request(dev_id=0)
+        
+        elif dev_id == 555:
+            self.write_TG_pre_request(dev_id=1)
+        
+        elif dev_id == 666:
+            self.write_TG_pre_request(dev_id=2)
     
     def act_sequence(self):
-        self.write_act_msg(False, 0)
+        self.write_act_msg()
         self.timer_tx_power.start(500)
 
     def write_FL_pre_request(self):
@@ -200,6 +164,22 @@ class CANWriteWorker(QObject):
         else:
             self.log_signal.emit(0, "[ERROR] TxPower/Temp pre request failed : RR")
     
+    def write_TG_pre_request(self, dev_id):
+        msg_id = TAILGATE_MSG_ID[1]
+        dlc = len(RQST_PWR_TEMP_PRE1)
+        msg_frame_pre1 = RQST_PWR_TEMP_PRE1
+        msg_frame_pre2 = RQST_PWR_TEMP_PRE2
+        msg_frame_pre3 = RQST_PWR_TEMP_PRE3
+
+        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre1)
+        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre2)
+        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre3)
+        print(f"dev_id : {dev_id}, pcan_handle : {self.pcan_handle_dict[dev_id]}")
+        if error_ok == PCAN_ERROR_OK:
+            pass
+        else:
+            self.log_signal.emit(0, f"[ERROR] TxPower/Temp pre request failed : TG#{dev_id + 1}")
+                
     def write_FL_deact(self):
         msg_id = DOOR_FL_MSG_ID[0]
         dlc = DOOR_DEACT[0]
@@ -270,8 +250,8 @@ class CANWriteWorker(QObject):
                 self.log_signal.emit(0, "[ERROR] TxPower/Temp pre request failed : RR")
             QThread.msleep(30)
 
-        else:   # Talegate test
-            msg_id = TALEGATE_MSG_ID[1]
+        else:   # Tailgate test
+            msg_id = TAILGATE_MSG_ID[1]
             dlc = len(RQST_PWR_TEMP_PRE1)
             msg_frame_pre1 = RQST_PWR_TEMP_PRE1
             msg_frame_pre2 = RQST_PWR_TEMP_PRE2
@@ -279,24 +259,13 @@ class CANWriteWorker(QObject):
 
             for dev_id in self.connected_dev_id:
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre1)
-                if error_ok == PCAN_ERROR_OK:
-                    pass
-                else:
-                    self.log_signal.emit(0, "[ERROR] TxPower/Temp request failed : Pre request 1")
-
-            for dev_id in self.connected_dev_id:
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre2)
-                if error_ok == PCAN_ERROR_OK:
-                    pass
-                else:
-                    self.log_signal.emit(0, "[ERROR] TxPower/Temp request failed : Pre request 2")
-            
-            for dev_id in self.connected_dev_id:
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame_pre3)
+                QThread.msleep(50)
                 if error_ok == PCAN_ERROR_OK:
                     pass
                 else:
-                    self.log_signal.emit(0, "[ERROR] TxPower/Temp request failed : Pre request 3")
+                    self.log_signal.emit(0, f"[ERROR] TxPower/Temp pre request failed : TG #{dev_id}")
 
     def write_pwr_tmp_request(self, sensorType):
         if self.flag_door_test:
@@ -317,158 +286,96 @@ class CANWriteWorker(QObject):
             else:
                 self.log_signal.emit(0, f"[ERROR] TxPower/Temp request failed : {sensorType}")
 
-        else:   # Talegate test
-            msg_id = TALEGATE_MSG_ID[1]
+        else:   # Tailgate test
+            msg_id = TAILGATE_MSG_ID[1]
             dlc = len(RQST_PWR_TEMP)
             msg_frame = RQST_PWR_TEMP
 
+            # for dev_id in self.connected_dev_id:
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[sensorType], msg_id, dlc, msg_frame)
+            if error_ok == PCAN_ERROR_OK:
+                pass
+            else:
+                self.log_signal.emit(0, "[ERROR] message write : TxPower/Temp request failed")
+
+    def write_act_msg(self):
+        if self.flag_door_test:
+            msg_id_FL = DOOR_FL_MSG_ID[0]
+            msg_id_FR = DOOR_FR_MSG_ID[0]
+            msg_id_RR = DOOR_RR_MSG_ID[0]
+            dlc = DOOR_ACT[0]
+            msg_frame = DOOR_ACT[1]
+
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_FL, dlc, msg_frame)
+            if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
+                pass
+            else:                           # Failed to write CAN message
+                self.log_signal.emit(0, f"[ERROR] message write : FL Act {error_ok}")
+
+            QThread.msleep(50)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_FR, dlc, msg_frame)
+            if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
+                pass
+            else:                           # Failed to write CAN message
+                self.log_signal.emit(0, "[ERROR] message write : FR Act")
+
+            QThread.msleep(50)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_RR, dlc, msg_frame)
+            if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
+                pass
+            else:                           # Failed to write CAN message
+                self.log_signal.emit(0, "[ERROR] message write : RR Act")
+
+        else:   # Tailgate test
+            msg_id = TAILGATE_MSG_ID[0]
+            dlc = len(TAILGATE_ACT)
+            msg_frame = TAILGATE_ACT
+
             for dev_id in self.connected_dev_id:
                 error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:
-                    pass
-                else:
-                    self.log_signal.emit(0, "[ERROR] message write : TxPower/Temp request failed")
-
-    def write_act_msg(self, isResend, dev_id_re):
-        if isResend:    # 재전송 요청 시 해당 dev_id에만 전송
-            if self.flag_door_test:
-                msg_id_FL = DOOR_FL_MSG_ID[0]
-                msg_id_FR = DOOR_FR_MSG_ID[0]
-                msg_id_RR = DOOR_RR_MSG_ID[0]
-                dlc = DOOR_ACT[0]
-                msg_frame = DOOR_ACT[1]
-
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
                     pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : Act")
 
-            else:   # Talegate test
-                msg_id = TALEGATE_MSG_ID[0]
-                dlc = len(TALEGATE_ACT)
-                msg_frame = TALEGATE_ACT
+    def write_deact_msg(self):
+        if self.flag_door_test:
+            msg_id_FL = DOOR_FL_MSG_ID[0]
+            msg_id_FR = DOOR_FR_MSG_ID[0]
+            msg_id_RR = DOOR_RR_MSG_ID[0]
+            dlc = DOOR_DEACT[0]
+            msg_frame = DOOR_DEACT[1]
 
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id_re], msg_id, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    pass
-                else:                           # Failed to write CAN message
-                    self.log_signal.emit(0, "[ERROR] message write : Act")
-        else:
-            if self.flag_door_test:
-                msg_id_FL = DOOR_FL_MSG_ID[0]
-                msg_id_FR = DOOR_FR_MSG_ID[0]
-                msg_id_RR = DOOR_RR_MSG_ID[0]
-                dlc = DOOR_ACT[0]
-                msg_frame = DOOR_ACT[1]
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame)
+            if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
+                pass
+            else:                           # Failed to write CAN message
+                self.log_signal.emit(0, "[ERROR] message write : FL Deact")
 
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_FL, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    pass
-                else:                           # Failed to write CAN message
-                    self.log_signal.emit(0, f"[ERROR] message write : FL Act {error_ok}")
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame)
+            if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
+                pass
+            else:                           # Failed to write CAN message
+                self.log_signal.emit(0, "[ERROR] message write : FR Deact")
 
-                QThread.msleep(50)
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_FR, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    pass
-                else:                           # Failed to write CAN message
-                    self.log_signal.emit(0, "[ERROR] message write : FR Act")
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame)
+            if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
+                pass
+            else:                           # Failed to write CAN message
+                self.log_signal.emit(0, "[ERROR] message write : RR Deact")
 
-                QThread.msleep(50)
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_RR, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    pass
-                else:                           # Failed to write CAN message
-                    self.log_signal.emit(0, "[ERROR] message write : RR Act")
-
-            else:   # Talegate test
-                msg_id = TALEGATE_MSG_ID[0]
-                dlc = len(TALEGATE_ACT)
-                msg_frame = TALEGATE_ACT
-
-                for dev_id in self.connected_dev_id:
-                    error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame)
-                    if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                        pass
-                    else:                           # Failed to write CAN message
-                        self.log_signal.emit(0, "[ERROR] message write : Act")
-
-    def write_deact_msg(self, isResend, dev_id_re):
-        if isResend:
-            if self.flag_door_test:
-                msg_id_FL = DOOR_FL_MSG_ID[0]
-                msg_id_FR = DOOR_FR_MSG_ID[0]
-                msg_id_RR = DOOR_RR_MSG_ID[0]
-                dlc = DOOR_DEACT[0]
-                msg_frame = DOOR_DEACT[1]
-
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id_FL, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    pass
-                else:                           # Failed to write CAN message
-                    self.log_signal.emit(0, "[ERROR] message write : FL Deact")
-
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id_FR, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    pass
-                else:                           # Failed to write CAN message
-                    self.log_signal.emit(0, "[ERROR] message write : FR Deact")
-
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id_RR, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    pass
-                else:                           # Failed to write CAN message
-                    self.log_signal.emit(0, "[ERROR] message write : RR Deact")
-
-            else:   # Talegate test
-                msg_id = TALEGATE_MSG_ID[0]
-                dlc = len(TALEGATE_DEACT)
-                msg_frame = TALEGATE_DEACT
-
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id_re], msg_id, dlc, msg_frame)
+        else:   # Tailgate test
+            msg_id = TAILGATE_MSG_ID[0]
+            dlc = len(TAILGATE_DEACT)
+            msg_frame = TAILGATE_DEACT
+            
+            for dev_id in self.connected_dev_id:
+                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame)
                 if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
                     pass
                 else:                           # Failed to write CAN message
                     self.log_signal.emit(0, "[ERROR] message write : Deact")
-        else:
-            if self.flag_door_test:
-                msg_id_FL = DOOR_FL_MSG_ID[0]
-                msg_id_FR = DOOR_FR_MSG_ID[0]
-                msg_id_RR = DOOR_RR_MSG_ID[0]
-                dlc = DOOR_DEACT[0]
-                msg_frame = DOOR_DEACT[1]
 
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    pass
-                else:                           # Failed to write CAN message
-                    self.log_signal.emit(0, "[ERROR] message write : FL Deact")
-
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    pass
-                else:                           # Failed to write CAN message
-                    self.log_signal.emit(0, "[ERROR] message write : FR Deact")
-
-                error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame)
-                if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                    pass
-                else:                           # Failed to write CAN message
-                    self.log_signal.emit(0, "[ERROR] message write : RR Deact")
-
-            else:   # Talegate test
-                msg_id = TALEGATE_MSG_ID[0]
-                dlc = len(TALEGATE_DEACT)
-                msg_frame = TALEGATE_DEACT
-
-                for dev_id in self.connected_dev_id:
-                    error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[dev_id], msg_id, dlc, msg_frame)
-                    if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
-                        pass
-                    else:                           # Failed to write CAN message
-                        self.log_signal.emit(0, "[ERROR] message write : Deact")
-    
     def stop(self):
         self.running = False
 
@@ -477,7 +384,7 @@ class CANReadWorker(QObject):
     finished = pyqtSignal()                                          # Signal for worker finish
     update_data_signal = pyqtSignal(bool, int, str, str, str, str)   # Signal for update TxPower, Temperature
     onOff_signal = pyqtSignal(bool)                                  # Signal for check radar on/off
-    resend_signal = pyqtSignal(int, bool)                            # Signal for Act/Deact resend request
+    resend_signal = pyqtSignal(int)                            # Signal for Act/Deact resend request
     stop_signal = pyqtSignal()                                       # Signal for worker stop
 
     def __init__(self, pcan_ctrl, dev_id, pcan_handle, flag_door_test, parent=None):
@@ -510,9 +417,17 @@ class CANReadWorker(QObject):
         self.flag_FL_on = False
         self.flag_FR_on = False
         self.flag_RR_on = False
+        self.flag_TG_on = False
+        self.flag_FL_on_once = False
+        self.flag_FR_on_once = False
+        self.flag_RR_on_once = False
+        self.flag_TG_on_once = False
+        self.flag_act_once   = False
+        self.flag_deact_once = False
         self.count_FL_pre_request = 0
         self.count_FR_pre_request = 0
         self.count_RR_pre_request = 0
+        self.count_TG_pre_request = 0
         self.pcan_handle = pcan_handle
             
     def run(self):
@@ -528,7 +443,7 @@ class CANReadWorker(QObject):
         self.resend_request_timer.start()
         event_loop = QEventLoop()
 
-        self.log_signal.emit(0, "CAN read thread started")
+        self.log_signal.emit(0, f"CAN read thread#{self.dev_id} started")
         while self.running:
             # CAN message read
             msg_data, msg_id = self.pcan_ctrl.read_unit_buf(m_PCANHandle=self.pcan_handle, output_mode='numpy')
@@ -536,9 +451,13 @@ class CANReadWorker(QObject):
             # Main request ACT
             if self.flag_act:
                 if msg_id:
-                    self.flag_radar_act = True
-                    self.flag_cmd_resend = False
                     self.data_processing(msg_id, msg_data)
+                    
+                    if not self.flag_act_once:
+                        self.flag_radar_act = True
+                        self.flag_cmd_resend = False
+                        self.flag_act_once = True
+                        self.flag_deact_once = False
                 else:
                     if not self.flag_radar_act and not self.flag_cmd_resend:
                         self.flag_cmd_resend = True
@@ -549,26 +468,49 @@ class CANReadWorker(QObject):
                     if self.flag_radar_act and not self.flag_cmd_resend:
                         self.flag_cmd_resend = True
                 else:
-                    self.flag_radar_act = False
-                    self.flag_cmd_resend = False
-                    self.flag_FL_on = False
-                    self.flag_FR_on = False
-                    self.flag_RR_on = False
-                    self.count_FL_pre_request = 0
+                    if not self.flag_deact_once:
+                        # Check if radar has no response within 1 cycle
+                        if self.flag_door_test:
+                            if self.flag_FL_on_once == False:
+                                self.log_signal.emit(2, "Radar has no response : FL")
+                            elif self.flag_FR_on_once == False:
+                                self.log_signal.emit(2, "Radar has no response : FR")
+                            elif self.flag_RR_on_once == False:
+                                self.log_signal.emit(2, "Radar has no response : RR")
+                        else:   # Tailgate test
+                            if self.flag_TG_on_once == False:
+                                self.log_signal.emit(2, f"Radar has no response : TG#{self.dev_id}")
+
+                        self.flag_radar_act = False
+                        self.flag_cmd_resend = False
+                        self.flag_FL_on = False
+                        self.flag_FR_on = False
+                        self.flag_RR_on = False
+                        self.flag_TG_on = False
+                        self.flag_FL_on_once = False
+                        self.flag_FR_on_once = False
+                        self.flag_RR_on_once = False
+                        self.flag_TG_on_once = False
+                        self.flag_act_once   = False
+                        self.flag_deact_once = True
+                        self.count_FL_pre_request = 0
+                    else:
+                        pass
 
         self.finished.emit()
 
     def data_processing(self, msg_id, msg_data):
         if self.flag_door_test:
             self.door_data_processing(msg_id, msg_data)
-        else:   # Talegate test
-            self.talegate_data_processing(msg_id, msg_data)
+        else:   # Tailgate test
+            self.tailgate_data_processing(msg_id, msg_data)
 
     def door_data_processing(self, msg_id, msg_data):
         # FL
         if msg_id == 0x1FF100A2:
             if not self.flag_FL_on:
                 self.flag_FL_on = True
+                self.flag_FL_on_once = True
                 self.count_FL_pre_request = 0
             data_code, result = self.get_txpower_temp(msg_id, msg_data)
             if data_code == "Tx0":
@@ -584,6 +526,7 @@ class CANReadWorker(QObject):
         elif msg_id == 0x1FF100A3:
             if not self.flag_FR_on:
                 self.flag_FR_on = True
+                self.flag_FR_on_once = True
                 self.count_FR_pre_request = 0
             data_code, result = self.get_txpower_temp(msg_id, msg_data)
             if data_code == "Tx0":
@@ -603,6 +546,7 @@ class CANReadWorker(QObject):
         elif msg_id == 0x1FF100A5:
             if not self.flag_RR_on:
                 self.flag_RR_on = True
+                self.flag_RR_on_once = True
                 self.count_RR_pre_request = 0
             data_code, result = self.get_txpower_temp(msg_id, msg_data)
             if data_code == "Tx0":
@@ -617,8 +561,12 @@ class CANReadWorker(QObject):
         # Error (msg_id == 999)
         else:
             pass
-    def talegate_data_processing(self, msg_id, msg_data):
+    def tailgate_data_processing(self, msg_id, msg_data):
         if msg_id == 0x1FF11400:
+            if not self.flag_TG_on:
+                self.flag_TG_on = True
+                self.flag_TG_on_once = True
+                self.count_TG_pre_request = 0
             data_code, result = self.get_txpower_temp(msg_id, msg_data)
             if data_code == "Tx0":
                 self.ascii_data_tx0 = result
@@ -639,7 +587,10 @@ class CANReadWorker(QObject):
             data_code = "Tx0"
             tx0_data_hex = msg_data[17:21]
             ascii_data_tx0 = tx0_data_hex.tobytes().decode('ascii')
-            self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx0 Power : {ascii_data_tx0} [dBm]")
+            if self.flag_door_test:
+                self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx0 Power : {ascii_data_tx0} [dBm]")
+            else:
+                self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}_{self.dev_id}] Tx0 Power : {ascii_data_tx0} [dBm]")
             if float(ascii_data_tx0) < TX_POWER_LIMIT[0] or float(ascii_data_tx0) > TX_POWER_LIMIT[1]:
                 self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx0 Power over the limit (MIN/MAX : {TX_POWER_LIMIT[0]}/{TX_POWER_LIMIT[1]})")
             return data_code, ascii_data_tx0
@@ -648,7 +599,10 @@ class CANReadWorker(QObject):
             data_code = "Tx1"
             tx1_data_hex = msg_data[18:22]
             ascii_data_tx1 = tx1_data_hex.tobytes().decode('ascii')
-            self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx1 Power : {ascii_data_tx1} [dBm]")
+            if self.flag_door_test:
+                self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx1 Power : {ascii_data_tx1} [dBm]")
+            else:
+                self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}_{self.dev_id}] Tx1 Power : {ascii_data_tx1} [dBm]")
             if float(ascii_data_tx1) < TX_POWER_LIMIT[0] or float(ascii_data_tx1) > TX_POWER_LIMIT[1]:
                 self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx1 Power over the limit (MIN/MAX : {TX_POWER_LIMIT[0]}/{TX_POWER_LIMIT[1]})")
             return data_code, ascii_data_tx1
@@ -657,7 +611,10 @@ class CANReadWorker(QObject):
             data_code = "Tx2"
             tx2_data_hex = msg_data[19:23]
             ascii_data_tx2 = tx2_data_hex.tobytes().decode('ascii')
-            self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx2 Power : {ascii_data_tx2} [dBm]")
+            if self.flag_door_test:
+                self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx2 Power : {ascii_data_tx2} [dBm]")
+            else:
+                self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}_{self.dev_id}] Tx2 Power : {ascii_data_tx2} [dBm]")
             if float(ascii_data_tx2) < TX_POWER_LIMIT[0] or float(ascii_data_tx2) > TX_POWER_LIMIT[1]:
                 self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx2 Power over the limit (MIN/MAX : {TX_POWER_LIMIT[0]}/{TX_POWER_LIMIT[1]})")
             return data_code, ascii_data_tx2
@@ -666,8 +623,14 @@ class CANReadWorker(QObject):
             data_code = "Temp"
             temp_data_hex = msg_data[21:26]
             ascii_data_temp = temp_data_hex.tobytes().decode('ascii')
-            self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Temperature : {ascii_data_temp} [℃]")
-            self.resend_signal.emit(msg_id, True)
+            if self.flag_door_test:
+                self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Temperature : {ascii_data_temp} [℃]")
+            else:
+                self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}_{self.dev_id}] Temperature : {ascii_data_temp} [℃]")
+            if self.flag_door_test:
+                self.resend_signal.emit(msg_id)
+            else:   # Tailgate test
+                self.resend_signal.emit(self.dev_id)
             if float(ascii_data_temp) < TEMP_LIMIT[0] or float(ascii_data_temp) > TEMP_LIMIT[1]:
                 self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Temperature over the limit (MIN/MAX : {TEMP_LIMIT[0]}/{TEMP_LIMIT[1]})")
             return data_code, ascii_data_temp
@@ -676,13 +639,19 @@ class CANReadWorker(QObject):
             # pass
         elif msg_data[9] == 0x5B and msg_data[10] == 0x54 and msg_data[11] == 0x65 and msg_data[12] == 0x6D and msg_data[13] == 0x70:
             # Send ACK message
-            self.resend_signal.emit(msg_id, True)
+            if self.flag_door_test:
+                self.resend_signal.emit(msg_id)
+            else:   # Tailgate test
+                self.resend_signal.emit(self.dev_id)
             data_code = "etc"
             result = 0
             return data_code, result
         elif  msg_data[8] == 0x57 and msg_data[9] == 0x61 and msg_data[10] == 0x72 and msg_data[11] == 0x6E and msg_data[12] == 0x69:
             # Send ACK message
-            self.resend_signal.emit(msg_id, True)
+            if self.flag_door_test:
+                self.resend_signal.emit(msg_id)
+            else:   # Tailgate test
+                self.resend_signal.emit(self.dev_id)
             data_code = "etc"
             result = 0
             return data_code, result
@@ -702,38 +671,58 @@ class CANReadWorker(QObject):
 
     def resend_request(self):
         if self.flag_act:
-            if not self.flag_FL_on:
-                self.count_FL_pre_request += 1
-            elif not self.flag_FR_on:
-                self.count_FR_pre_request += 1
-            elif not self.flag_RR_on:
-                self.count_RR_pre_request += 1
+            if self.flag_door_test:
+                if not self.flag_FL_on:
+                    self.count_FL_pre_request += 1
+                elif not self.flag_FR_on:
+                    self.count_FR_pre_request += 1
+                elif not self.flag_RR_on:
+                    self.count_RR_pre_request += 1
+            else:   # Tailgate test
+                if not self.flag_TG_on:
+                    self.count_TG_pre_request += 1
 
-            self.flag_FL_on = False
-            self.flag_FR_on = False
-            self.flag_RR_on = False
+            if self.flag_door_test:
+                self.flag_FL_on = False
+                self.flag_FR_on = False
+                self.flag_RR_on = False
+            else:   # Tailgate test
+                self.flag_TG_on = False
 
-            if self.count_FL_pre_request > 2:
-                self.log_signal.emit(0, "[THREAD_READ] FL pre resend request")
-                self.resend_signal.emit(555, True)
-                self.count_FL_pre_request = 0
-            elif self.count_FR_pre_request > 2:
-                self.log_signal.emit(0, "[THREAD_READ] FR pre resend request")
-                self.resend_signal.emit(666, True)
-                self.count_FR_pre_request = 0
-            elif self.count_RR_pre_request > 2:
-                self.log_signal.emit(0, "[THREAD_READ] RR pre resend request")
-                self.resend_signal.emit(777, True)
-                self.count_RR_pre_request = 0
-
-            if self.flag_cmd_resend:
-                if self.flag_act and not self.flag_radar_act:
-                    self.log_signal.emit(0, "[THREAD_READ] Act resend request")
-                    self.resend_signal.emit(self.dev_id, True)   # Act request
-
-                elif not self.flag_act and self.flag_radar_act:
-                    self.log_signal.emit(0, "[THREAD_READ] Deact resend request")
-                    self.resend_signal.emit(self.dev_id, False)  # Deact request
+            if self.flag_door_test:
+                if self.count_FL_pre_request > 2:
+                    self.log_signal.emit(0, "[READ] FL pre resend request")
+                    self.resend_signal.emit(111)
+                    self.count_FL_pre_request = 0
+                elif self.count_FR_pre_request > 2:
+                    self.log_signal.emit(0, "[READ] FR pre resend request")
+                    self.resend_signal.emit(222)
+                    self.count_FR_pre_request = 0
+                elif self.count_RR_pre_request > 2:
+                    self.log_signal.emit(0, "[READ] RR pre resend request")
+                    self.resend_signal.emit(333)
+                    self.count_RR_pre_request = 0
+            else:   # Tailgate test
+                if self.count_TG_pre_request > 2 and self.dev_id == 0:
+                    self.log_signal.emit(0, f"[READ] TG#1 pre resend request")
+                    self.resend_signal.emit(444)
+                    self.count_TG_pre_request = 0
+                elif self.count_TG_pre_request > 2 and self.dev_id == 1:
+                    self.log_signal.emit(0, f"[READ] TG#2 pre resend request")
+                    self.resend_signal.emit(555)
+                    self.count_TG_pre_request = 0
+                elif self.count_TG_pre_request > 2 and self.dev_id == 2:
+                    self.log_signal.emit(0, f"[READ] TG#3 pre resend request")
+                    self.resend_signal.emit(666)
+                    self.count_TG_pre_request = 0
+        
+        # else:   # Deact
+        #     if self.flag_cmd_resend:
+        #         if self.flag_door_test:
+        #             self.log_signal.emit(0, "[READ] Deact resend request")
+        #             self.resend_signal.emit(self.dev_id, False)  # Deact request
+        #         else:   # Tailgate test
+        #             pass
                 
 
     def stop(self):
@@ -773,7 +762,11 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.flag_door_test = True
         self.flag_test_finished = False
         self.flag_on = False
+        self.flag_preTest = False
+        self.flag_preOn = True
+        self.flag_pre_test_finished = False
         self.manualMode = True
+        
         
         # Initialize variables
         self.connected_dev_id = []
@@ -790,6 +783,10 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.inner_cycle_timer = 0
         self.outer_cycle_timer = 0
         self.totalTestTime = 0
+        self.pre_test_timer = 0
+        self.total_time_inner = 0
+        self.total_time_outer = 0
+        self.preTestTime = 0
         self.max_logFile_size = 10*1024*1024
 
         # Initial font setting
@@ -804,7 +801,9 @@ class StatusGUI(QtWidgets.QMainWindow):
 
         # Initialize system related buttons/labels
         self.cmb_modeSelection.currentIndexChanged.connect(self.func_modeSelection)
+        self.cmb_preTest.currentIndexChanged.connect(self.func_preTest)
         self.checkBox_InnerMode.stateChanged.connect(self.toggle_test_mode_setting)
+        self.checkBox_preTestMode.stateChanged.connect(self.toggle_pre_test_mode_setting)
 
         self.btn_clearFileName.clicked.connect(self.func_clearFileName)
         self.btn_folder.clicked.connect(self.func_oper_path)
@@ -832,9 +831,10 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.line_numInnerCycle.textChanged.connect(self.update_test_setting)
         self.line_outerOffTime.textChanged.connect(self.update_test_setting)
         self.line_numOuterCycle.textChanged.connect(self.update_test_setting)
+        self.line_preTestTime.textChanged.connect(self.update_test_setting)
 
         self.radioBtn_door.toggled.connect(self.update_num_dev)
-        self.radioBtn_talegate.toggled.connect(self.update_num_dev)
+        self.radioBtn_tailgate.toggled.connect(self.update_num_dev)
         self.radioBtn_manualMode.toggled.connect(self.update_operation_mode)
         self.radioBtn_autoMode.toggled.connect(self.update_operation_mode)
         self.radioBtn_sysLogMon.toggled.connect(self.update_syslog_mode)
@@ -867,49 +867,94 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.txtEdit_criLog.clear()
 
     def send_pre_rqst1(self):
-        msg_id_FL = DOOR_FL_MSG_ID[1]
-        dlc = len(RQST_PWR_TEMP_PRE1)
-        msg_frame_pre1 = RQST_PWR_TEMP_PRE1
-        msg_frame_pre2 = RQST_PWR_TEMP_PRE2
-        msg_frame_pre3 = RQST_PWR_TEMP_PRE3
+        if self.flag_door_test:
+            msg_id_FL = DOOR_FL_MSG_ID[1]
+            dlc = len(RQST_PWR_TEMP_PRE1)
+            msg_frame_pre1 = RQST_PWR_TEMP_PRE1
+            msg_frame_pre2 = RQST_PWR_TEMP_PRE2
+            msg_frame_pre3 = RQST_PWR_TEMP_PRE3
 
-        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre1)
-        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre2)
-        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre3)            
-        if error_ok == PCAN_ERROR_OK:
-            self.print_log(0, "[MAIN] Button clicked : FL power, temp request")
-        else:
-            pass
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre1)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre2)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre3)            
+            if error_ok == PCAN_ERROR_OK:
+                self.print_log(0, "[MAIN] Button clicked : FL power, temp request")
+            else:
+                pass
+        else:   # Tailgate test
+            msg_id = TAILGATE_MSG_ID[1]
+            dlc = len(RQST_PWR_TEMP_PRE1)
+            msg_frame_pre1 = RQST_PWR_TEMP_PRE1
+            msg_frame_pre2 = RQST_PWR_TEMP_PRE2
+            msg_frame_pre3 = RQST_PWR_TEMP_PRE3
+
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id, dlc, msg_frame_pre1)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id, dlc, msg_frame_pre2)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id, dlc, msg_frame_pre3)            
+            if error_ok == PCAN_ERROR_OK:
+                self.print_log(0, f"[MAIN] Button clicked : TG#1 power, temp request")
+            else:
+                pass
 
     def send_pre_rqst2(self):
-        msg_id_FR = DOOR_FR_MSG_ID[1]
-        dlc = len(RQST_PWR_TEMP_PRE1)
-        msg_frame_pre1 = RQST_PWR_TEMP_PRE1
-        msg_frame_pre2 = RQST_PWR_TEMP_PRE2
-        msg_frame_pre3 = RQST_PWR_TEMP_PRE3
+        if self.flag_door_test:
+            msg_id_FR = DOOR_FR_MSG_ID[1]
+            dlc = len(RQST_PWR_TEMP_PRE1)
+            msg_frame_pre1 = RQST_PWR_TEMP_PRE1
+            msg_frame_pre2 = RQST_PWR_TEMP_PRE2
+            msg_frame_pre3 = RQST_PWR_TEMP_PRE3
 
-        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame_pre1)
-        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame_pre2)
-        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame_pre3)
-        if error_ok == PCAN_ERROR_OK:
-            self.print_log(0, "[MAIN] Button clicked : FR power, temp request")
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame_pre1)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame_pre2)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame_pre3)
+            if error_ok == PCAN_ERROR_OK:
+                self.print_log(0, "[MAIN] Button clicked : FR power, temp request")
+            else:
+                pass
         else:
-            pass
+            msg_id = TAILGATE_MSG_ID[1]
+            dlc = len(RQST_PWR_TEMP_PRE1)
+            msg_frame_pre1 = RQST_PWR_TEMP_PRE1
+            msg_frame_pre2 = RQST_PWR_TEMP_PRE2
+            msg_frame_pre3 = RQST_PWR_TEMP_PRE3
+
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[1], msg_id, dlc, msg_frame_pre1)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[1], msg_id, dlc, msg_frame_pre2)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[1], msg_id, dlc, msg_frame_pre3)            
+            if error_ok == PCAN_ERROR_OK:
+                self.print_log(0, "[MAIN] Button clicked : TG#2 power, temp request")
+            else:
+                pass
 
     def send_pre_rqst3(self):
-        msg_id_RR = DOOR_RR_MSG_ID[1]
-        dlc = len(RQST_PWR_TEMP_PRE1)
-        msg_frame_pre1 = RQST_PWR_TEMP_PRE1
-        msg_frame_pre2 = RQST_PWR_TEMP_PRE2
-        msg_frame_pre3 = RQST_PWR_TEMP_PRE3
+        if self.flag_door_test:
+            msg_id_RR = DOOR_RR_MSG_ID[1]
+            dlc = len(RQST_PWR_TEMP_PRE1)
+            msg_frame_pre1 = RQST_PWR_TEMP_PRE1
+            msg_frame_pre2 = RQST_PWR_TEMP_PRE2
+            msg_frame_pre3 = RQST_PWR_TEMP_PRE3
 
-        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame_pre1)
-        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame_pre2)
-        error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame_pre3)
-        if error_ok == PCAN_ERROR_OK:
-            self.print_log(0, "[MAIN] Button clicked : RR power, temp request")
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame_pre1)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame_pre2)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame_pre3)
+            if error_ok == PCAN_ERROR_OK:
+                self.print_log(0, "[MAIN] Button clicked : RR power, temp request")
+            else:
+                pass
         else:
-            pass
+            msg_id = TAILGATE_MSG_ID[1]
+            dlc = len(RQST_PWR_TEMP_PRE1)
+            msg_frame_pre1 = RQST_PWR_TEMP_PRE1
+            msg_frame_pre2 = RQST_PWR_TEMP_PRE2
+            msg_frame_pre3 = RQST_PWR_TEMP_PRE3
+
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[2], msg_id, dlc, msg_frame_pre1)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[2], msg_id, dlc, msg_frame_pre2)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[2], msg_id, dlc, msg_frame_pre3)            
+            if error_ok == PCAN_ERROR_OK:
+                self.print_log(0, "[MAIN] Button clicked : TG#3 power, temp request")
+            else:
+                pass
 
     def update_operation_display(self):
         hours = self.operation_timer // 3600
@@ -934,6 +979,19 @@ class StatusGUI(QtWidgets.QMainWindow):
         # self.lab_Rdr3_txPwr2.setText("0")
         # self.lab_Rdr3_txPwr3.setText("0")
         # self.lab_Rdr3_tmp.setText("0")
+
+    def preTest_work(self):
+        if self.pre_test_timer < self.preTestTime - 1:
+            self.pre_test_timer += 1
+            self.line_remainTime.setText(f"{self.preTestTime - self.pre_test_timer}")
+            if self.flag_preOn:
+                self.line_currentMode.setText("PreOn")
+            else:
+                self.line_currentMode.setText("PreOff")
+        else:
+            self.pre_test_timer = 0
+            self.line_remainTime.setText("0")
+            self.flag_pre_test_finished = True            
 
     def inner_cycle_work(self):
         if self.flag_innerOnTime:
@@ -1008,10 +1066,19 @@ class StatusGUI(QtWidgets.QMainWindow):
 
     def cycle_counter(self):
         if self.line_innerOnTime.text().strip():
-            if self.flag_innerCycle:
-                self.inner_cycle_work()
-            else:
-                self.outer_cycle_work()
+            if self.flag_preTest:
+                if not self.flag_pre_test_finished:
+                    self.preTest_work()
+                else:
+                    if self.flag_innerCycle:
+                        self.inner_cycle_work()
+                    else:
+                        self.outer_cycle_work()
+            else:   # Without pretest
+                if self.flag_innerCycle:
+                    self.inner_cycle_work()
+                else:
+                    self.outer_cycle_work()
         else:   # Case that user want continuous operation
             pass
 
@@ -1039,6 +1106,14 @@ class StatusGUI(QtWidgets.QMainWindow):
             self.group_outerSetting.setDisabled(False)
             self.flag_innerCycle = False
 
+    def toggle_pre_test_mode_setting(self, state):
+        if state == Qt.Checked:
+            self.groupBox_preTest.setDisabled(False)
+            self.flag_preTest = True
+        else:
+            self.groupBox_preTest.setDisabled(True)
+            self.flag_preTest = False
+
     def update_test_setting(self):
         try:
             # If input value is not integer, consider 0
@@ -1046,16 +1121,20 @@ class StatusGUI(QtWidgets.QMainWindow):
             self.innerOffTime = int(self.line_innerOffTime.text()) if self.line_innerOffTime.text().isdigit() else 0
             self.numInnerCycle = int(self.line_numInnerCycle.text()) if self.line_numInnerCycle.text().isdigit() else 0
             
+            
             # Update result to line_totalInnerCycleTime
-            total_time_inner = (self.innerOnTime + self.innerOffTime) * self.numInnerCycle
-            self.line_totalInnerCycleTime.setText(str(total_time_inner))
+            self.total_time_inner = (self.innerOnTime + self.innerOffTime) * self.numInnerCycle
+            self.line_totalInnerCycleTime.setText(str(self.total_time_inner))
+            
+            if self.flag_preTest:
+                self.total_time_inner += self.preTestTime
 
-            hours = total_time_inner // 3600
-            mins = (total_time_inner % 3600) // 60
-            secs = total_time_inner % 60
+            hours = self.total_time_inner // 3600
+            mins = (self.total_time_inner % 3600) // 60
+            secs = self.total_time_inner % 60
             self.line_totalTestTime.setText(f"{hours}시간 {mins}분 {secs}초")
 
-            self.totalTestTime = total_time_inner
+            self.totalTestTime = self.total_time_inner
         # If occur exclude case, consider 0
         except ValueError:
             self.line_totalInnerCycleTime.setText("0")
@@ -1065,17 +1144,26 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.outerOffTime = int(self.line_outerOffTime.text()) if self.line_outerOffTime.text().isdigit() else 0
                 self.numOuterCycle = int(self.line_numOuterCycle.text()) if self.line_numOuterCycle.text().isdigit() else 0
 
-                total_time_outer = (total_time_inner + self.outerOffTime) * self.numOuterCycle
-                self.line_totalOuterCycleTime.setText(str(total_time_outer))
+                self.total_time_outer = (self.total_time_inner + self.outerOffTime) * self.numOuterCycle
+                self.line_totalOuterCycleTime.setText(str(self.total_time_outer))
+                
+                if self.flag_preTest:
+                    self.total_time_outer += self.preTestTime
 
-                hours = total_time_outer // 3600
-                mins = (total_time_outer % 3600) // 60
-                secs = total_time_outer % 60
+                hours = self.total_time_outer // 3600
+                mins = (self.total_time_outer % 3600) // 60
+                secs = self.total_time_outer % 60
                 self.line_totalTestTime.setText(f"{hours}시간 {mins}분 {secs}초")
 
-                self.totalTestTime = total_time_outer
+                self.totalTestTime = self.total_time_outer
             except ValueError:
                 self.line_totalOuterCycleTime.setText("0")
+
+        if self.flag_preTest:
+            try:
+                self.preTestTime = int(self.line_preTestTime.text()) if self.line_preTestTime.text().isdigit() else 0
+            except ValueError:
+                self.line_preTestTime.setText("0")
 
     def clear_cycle_setting(self):
         if self.flag_innerCycle:
@@ -1092,13 +1180,13 @@ class StatusGUI(QtWidgets.QMainWindow):
     def update_num_dev(self):
         if self.radioBtn_door.isChecked():
             self.flag_door_test = True
-            self.radioBtn_talegate.setChecked(False)
+            self.radioBtn_tailgate.setChecked(False)
             self.groupBox_canDev2.setEnabled(False)
             self.groupBox_canDev3.setEnabled(False)
             self.line_radar1.setText("FL")
             self.line_radar2.setText("FR")
             self.line_radar3.setText("RR")
-        else:   # Talegate test
+        else:   # Tailgate test
             self.flag_door_test = False
             self.radioBtn_door.setChecked(False)
             self.groupBox_canDev2.setEnabled(True)
@@ -1345,6 +1433,11 @@ class StatusGUI(QtWidgets.QMainWindow):
                 cri_cursor.removeSelectedText()
             self.cri_logger.debug(message)
 
+    def func_preTest(self, index):
+        if index == 0:
+            self.flag_preOn = True
+        else:   # pre OFF time
+            self.flag_preOn = False
 
     def func_modeSelection(self, index):
         date = datetime.datetime.now()
@@ -1393,7 +1486,12 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.line_numInnerCycle.setText("30")
                 self.line_outerOffTime.setText("3000")
                 self.line_numOuterCycle.setText("1000")
-
+            # elif index == 21:
+                # self.line_innerOnTime.setText("8")
+                # self.line_innerOffTime.setText("12")
+                # self.line_numInnerCycle.setText("2700")
+                # self.line_outerOffTime.setText("28800")
+                # self.line_numOuterCycle.setText("1")
 
     def func_clearFileName(self):
         self.line_logFileName.setText("")
@@ -1459,7 +1557,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.lab_Rdr3_txPwr3.setText(tx2)
                 self.lab_Rdr3_tmp.setText(temp)
 
-        else:   # Talegate test
+        else:   # Tailgate test
             if self.connected_dev_dict[1] == dev_id:
                 self.lab_Rdr1_txPwr1.setText(tx0)
                 self.lab_Rdr1_txPwr2.setText(tx1)
@@ -1519,7 +1617,7 @@ class StatusGUI(QtWidgets.QMainWindow):
 
     def func_start(self):
         # When clicked start button, poped up a messageBox to confirm
-        if self.btn_device1.isChecked():
+        if self.btn_device1.isChecked() or self.btn_device2.isChecked() or self.btn_device3.isChecked():
             reply = QMessageBox.question(self, "확인 메시지", "테스트를 시작하시겠습니까?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply == QMessageBox.Yes:
                 # Print system log
@@ -1529,11 +1627,16 @@ class StatusGUI(QtWidgets.QMainWindow):
                 # Process start
                 self.process_start()
 
+                # Send ON signal
+                self.flag_on = True
+                if self.flag_preTest and not self.flag_preOn:
+                    pass
+                else:
+                    self.func_emit_onOffStatus(self.flag_on)
+
                 # Interlock Start/Stop/Unlock button
                 self.flag_start = True
                 self.flag_lock = True
-                self.flag_on = True
-                self.func_emit_onOffStatus(self.flag_on)
                 self.btn_start.setEnabled(False)
                 self.btn_start.setStyleSheet(color_disable)
                 self.btn_unlock.setEnabled(True)
@@ -1592,6 +1695,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.lab_programStatus.setStyleSheet("color: rgb(0, 120, 0);")
                 self.lab_timer.hide()
                 self.flag_start = False
+                self.flag_pre_test_finished = False
                 self.operation_timer = 0
                 self.lab_timer.setText("0000:00:00")
 
@@ -1624,7 +1728,6 @@ class StatusGUI(QtWidgets.QMainWindow):
         elif self.flag_start and self.flag_test_finished:
             # Print and save system log
             self.print_log(0, "[MAIN] Button clicked : auto STOP")
-            self.sys_logger.debug("[MAIN] Button clicked : auto STOP")
 
             # Emit signal to stop worker        
             self.write_worker.stop_signal.emit()

@@ -17,21 +17,16 @@ from PyQt5.QtWidgets import QMessageBox, QFileDialog
 from PyQt5.QtCore import QTimer, QTime, QThread, Qt, pyqtSignal, QObject, QEventLoop, pyqtSlot
 
 update_date = "25.04.16"
-version = "version 1.0.0"
+version = "Ver_1.0.1"
 '''
-# NOTE Ver_1.0.0
-1. Pre test mode 기능 수정
-    > Pre ON/OFF/Num cycle/Wait 기능 추가
-2. Log file 구조 변경
-    > Log file이 저장될 폴더가 존재하지 않는경우 자동으로 생성
-    > System log, CAN log, Data log 3가지로 구분
-    > Data log의 경우 Radar1, Radar2, Radar3 3개 장치 각각 저장되도록 구현
-    > Data log는 csv 확장으로 저장되도록 변경
-3. 최초 배포버전
-    > 실행파일 생성 및 윈도우 환경 데스크탑에서 정상 동작 확인
+# NOTE Ver_1.0.1
+1. Radar가 act 상태일때만 data가 csv에 저장되도록 수정
+2. 우측 패널에 Act/Sleep에 따라 적색/녹색등으로 알아보기 쉽게 수정
 
 # TODO
+* 프로그래머블 테스트모드 추가
 * 엑셀에서 테스트 모드 데이터 로드하는 방안 강구
+
 * 실행파일 생성 : pyinstaller --onefile --noconsole --add-data "Status_Logging_GUI.ui;." Status_Logging_GUI.py
 '''
 
@@ -39,7 +34,10 @@ version = "version 1.0.0"
 color_disable = "background-color: rgb(156, 156, 156);\ncolor: rgb(255, 255, 255);\nborder-radius: 6px;"
 color_enable = "background-color: rgb(170, 0, 0);\ncolor: rgb(255, 255, 255);\nborder-radius: 6px;"
 color_lock = "background-color: rgb(90, 90, 90);\ncolor: rgb(255, 255, 255);\nborder-radius: 6px;"
+activate = "image: url(:/etc/UI_IMG/Activate.png);"
+sleep = "image: url(:/etc/UI_IMG/Sleep.png);"
 
+# NOTE :: CANWriteWorker
 class CANWriteWorker(QObject):
     log_signal = pyqtSignal(int, str)                       # Signal for print log
     finished = pyqtSignal()                                 # Signal for worker finish
@@ -379,12 +377,14 @@ class CANWriteWorker(QObject):
     def stop(self):
         self.running = False
 
+# NOTE :: CANReadWorker
 class CANReadWorker(QObject):
     log_signal = pyqtSignal(int, str)                                # Signal for print log
+    status_signal = pyqtSignal(int)                                  # Signal for show radar signal
     finished = pyqtSignal()                                          # Signal for worker finish
     update_data_signal = pyqtSignal(bool, int, str, str, str, str)   # Signal for update TxPower, Temperature
     onOff_signal = pyqtSignal(bool)                                  # Signal for check radar on/off
-    resend_signal = pyqtSignal(int)                            # Signal for Act/Deact resend request
+    resend_signal = pyqtSignal(int)                                  # Signal for Act/Deact resend request
     stop_signal = pyqtSignal()                                       # Signal for worker stop
 
     def __init__(self, pcan_ctrl, dev_id, pcan_handle, flag_door_test, parent=None):
@@ -457,7 +457,7 @@ class CANReadWorker(QObject):
                         self.flag_radar_act = True
                         self.flag_cmd_resend = False
                         self.flag_act_once = True
-                        self.flag_deact_once = False
+                        self.flag_deact_once = False                        
                 else:
                     if not self.flag_radar_act and not self.flag_cmd_resend:
                         self.flag_cmd_resend = True
@@ -494,6 +494,12 @@ class CANReadWorker(QObject):
                         self.flag_act_once   = False
                         self.flag_deact_once = True
                         self.count_FL_pre_request = 0
+                        if self.flag_door_test:
+                            self.status_signal.emit(FL, False)
+                            self.status_signal.emit(FR, False)
+                            self.status_signal.emit(RR, False)
+                        else:
+                            self.status_signal.emit(TG, False)
                     else:
                         pass
 
@@ -522,6 +528,7 @@ class CANReadWorker(QObject):
             elif data_code == "Temp":
                 self.ascii_data_temp = result
             self.update_data_signal.emit(self.flag_door_test, 0, str(self.ascii_data_tx0), str(self.ascii_data_tx1), str(self.ascii_data_tx2), str(self.ascii_data_temp))
+            self.status_signal.emit(FL, True)
         # FR
         elif msg_id == 0x1FF100A3:
             if not self.flag_FR_on:
@@ -538,6 +545,7 @@ class CANReadWorker(QObject):
             elif data_code == "Temp":
                 self.ascii_data_temp_r2 = result
             self.update_data_signal.emit(self.flag_door_test, 1, str(self.ascii_data_tx0_r2), str(self.ascii_data_tx1_r2), str(self.ascii_data_tx2_r2), str(self.ascii_data_temp_r2))
+            self.status_signal.emit(FR, True)
         # RL (Not used in this test)
         elif msg_id == 0x1FF100A4:
             data_code, result = self.get_txpower_temp(msg_id, msg_data)
@@ -558,6 +566,7 @@ class CANReadWorker(QObject):
             elif data_code == "Temp":
                 self.ascii_data_temp_r3 = result
             self.update_data_signal.emit(self.flag_door_test, 2, str(self.ascii_data_tx0_r3), str(self.ascii_data_tx1_r3), str(self.ascii_data_tx2_r3), str(self.ascii_data_temp_r3))
+            self.status_signal.emit(RR, True)
         # Error (msg_id == 999)
         else:
             pass
@@ -577,6 +586,7 @@ class CANReadWorker(QObject):
             elif data_code == "Temp":
                 self.ascii_data_temp = result
             self.update_data_signal.emit(self.flag_door_test, self.dev_id, str(self.ascii_data_tx0), str(self.ascii_data_tx1), str(self.ascii_data_tx2), str(self.ascii_data_temp))
+            self.status_signal.emit(TG, True)
         # Error (msg_id == 999)
         else:
             pass
@@ -591,8 +601,11 @@ class CANReadWorker(QObject):
                 self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx0 Power : {ascii_data_tx0} [dBm]")
             else:
                 self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}_{self.dev_id}] Tx0 Power : {ascii_data_tx0} [dBm]")
-            if float(ascii_data_tx0) < TX_POWER_LIMIT[0] or float(ascii_data_tx0) > TX_POWER_LIMIT[1]:
-                self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx0 Power over the limit (MIN/MAX : {TX_POWER_LIMIT[0]}/{TX_POWER_LIMIT[1]})")
+            try:
+                if float(ascii_data_tx0) < TX_POWER_LIMIT[0] or float(ascii_data_tx0) > TX_POWER_LIMIT[1]:
+                    self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx0 Power over the limit (MIN/MAX : {TX_POWER_LIMIT[0]}/{TX_POWER_LIMIT[1]})")
+            except ValueError:
+                self.log_signal.emit(1, "Error occured : Tx0 Power")
             return data_code, ascii_data_tx0
         # Tx1 Power
         elif msg_data[5] == 0x31 and msg_data[6] == 0x50 and msg_data[7] == 0x6F and msg_data[8] == 0x77 and msg_data[9] == 0x65 and msg_data[10] == 0x72:
@@ -603,8 +616,11 @@ class CANReadWorker(QObject):
                 self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx1 Power : {ascii_data_tx1} [dBm]")
             else:
                 self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}_{self.dev_id}] Tx1 Power : {ascii_data_tx1} [dBm]")
-            if float(ascii_data_tx1) < TX_POWER_LIMIT[0] or float(ascii_data_tx1) > TX_POWER_LIMIT[1]:
-                self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx1 Power over the limit (MIN/MAX : {TX_POWER_LIMIT[0]}/{TX_POWER_LIMIT[1]})")
+            try:
+                if float(ascii_data_tx1) < TX_POWER_LIMIT[0] or float(ascii_data_tx1) > TX_POWER_LIMIT[1]:
+                    self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx1 Power over the limit (MIN/MAX : {TX_POWER_LIMIT[0]}/{TX_POWER_LIMIT[1]})")
+            except ValueError:
+                self.log_signal.emit(1, "Error occured : Tx1 Power")            
             return data_code, ascii_data_tx1
         # Tx2 Power
         elif msg_data[6] == 0x32 and msg_data[7] == 0x50 and msg_data[8] == 0x6F and msg_data[9] == 0x77 and msg_data[10] == 0x65 and msg_data[11] == 0x72:
@@ -615,8 +631,11 @@ class CANReadWorker(QObject):
                 self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx2 Power : {ascii_data_tx2} [dBm]")
             else:
                 self.log_signal.emit(1, f"[{RECV_MSG_ID_LIST[msg_id]}_{self.dev_id}] Tx2 Power : {ascii_data_tx2} [dBm]")
-            if float(ascii_data_tx2) < TX_POWER_LIMIT[0] or float(ascii_data_tx2) > TX_POWER_LIMIT[1]:
-                self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx2 Power over the limit (MIN/MAX : {TX_POWER_LIMIT[0]}/{TX_POWER_LIMIT[1]})")
+            try:
+                if float(ascii_data_tx2) < TX_POWER_LIMIT[0] or float(ascii_data_tx2) > TX_POWER_LIMIT[1]:
+                    self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Tx2 Power over the limit (MIN/MAX : {TX_POWER_LIMIT[0]}/{TX_POWER_LIMIT[1]})")
+            except ValueError:
+                self.log_signal.emit(1, "Error occured : Tx2 Power")
             return data_code, ascii_data_tx2
         # Temperature
         elif msg_data[8] == 0x54 and msg_data[9] == 0x65 and msg_data[10] == 0x6D and msg_data[11] == 0x70 and msg_data[12] == 0x65:
@@ -631,8 +650,12 @@ class CANReadWorker(QObject):
                 self.resend_signal.emit(msg_id)
             else:   # Tailgate test
                 self.resend_signal.emit(self.dev_id)
-            if float(ascii_data_temp) < TEMP_LIMIT[0] or float(ascii_data_temp) > TEMP_LIMIT[1]:
-                self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Temperature over the limit (MIN/MAX : {TEMP_LIMIT[0]}/{TEMP_LIMIT[1]})")
+            
+            try:
+                if float(ascii_data_temp) < TEMP_LIMIT[0] or float(ascii_data_temp) > TEMP_LIMIT[1]:
+                    self.log_signal.emit(2, f"[{RECV_MSG_ID_LIST[msg_id]}] Temperature over the limit (MIN/MAX : {TEMP_LIMIT[0]}/{TEMP_LIMIT[1]})")
+            except ValueError:
+                self.log_signal.emit(1, "Error occured : Temperature")
             return data_code, ascii_data_temp
         # GPADC
         # elif msg_data[8] == 0x47 and msg_data[9] == 0x50 and msg_data[10] == 0x41 and msg_data[11] == 0x44 and msg_data[12] == 0x43:
@@ -728,6 +751,7 @@ class CANReadWorker(QObject):
     def stop(self):
         self.running = False
 
+# NOTE :: StatusGUI
 class StatusGUI(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1197,7 +1221,8 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.progressBar.setValue(progressVal)
             self.update_operation_display()
             self.cycle_counter()
-            self.save_csv_data()
+            if self.flag_on:
+                self.save_csv_data()
 
         date = datetime.datetime.now()
         crnt_date = (f'{date.year}년 {date.month}월 {date.day}일')
@@ -1415,6 +1440,32 @@ class StatusGUI(QtWidgets.QMainWindow):
             else:       # Failed
                 self.btn_device3.toggle()
 
+    @pyqtSlot(int, bool)
+    def show_status(self, sensorType, status):
+        if status:
+            if sensorType == FL:
+                self.label_actDeact1.setStyleSheet(activate)
+            elif sensorType == FR:
+                self.label_actDeact1.setStyleSheet(activate)
+            elif sensorType == RR:
+                self.label_actDeact1.setStyleSheet(activate)
+            elif sensorType == TG:
+                self.label_actDeact1.setStyleSheet(activate)
+            else:
+                pass
+        else:
+            if sensorType == FL:
+                self.label_actDeact1.setStyleSheet(sleep)
+            elif sensorType == FR:
+                self.label_actDeact1.setStyleSheet(sleep)
+            elif sensorType == RR:
+                self.label_actDeact1.setStyleSheet(sleep)
+            elif sensorType == TG:
+                self.label_actDeact1.setStyleSheet(sleep)
+            else:
+                pass
+
+
     def print_log(self, category, message):
         # Print log to the textEdit
         date = datetime.datetime.now()
@@ -1471,6 +1522,15 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.line_innerOnTime.setText("8")
                 self.line_innerOffTime.setText("12")
                 self.line_numInnerCycle.setText("1440")
+            elif index == 16:
+                self.checkBox_preTestMode.setChecked(True)
+                self.line_preOnTime.setText("0")
+                self.line_preOffTime.setText("7200")
+                self.line_numPreCycle.setText("1")
+                self.line_preWaitTime.setText("0")
+                self.line_innerOnTime.setText("8")
+                self.line_innerOffTime.setText("12")
+                self.line_numInnerCycle.setText("3240")
             elif index == 20:
                 self.checkBox_InnerMode.setChecked(False)
                 self.line_innerOnTime.setText("8")
@@ -1498,6 +1558,13 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.line_innerOffTime.setText("12")
                 self.line_numInnerCycle.setText("45")
                 self.line_outerOffTime.setText("900")
+                self.line_numOuterCycle.setText("4")
+            elif index == 28:
+                self.checkBox_InnerMode.setChecked(False)
+                self.line_innerOnTime.setText("8")
+                self.line_innerOffTime.setText("12")
+                self.line_numInnerCycle.setText("360")
+                self.line_outerOffTime.setText("604800")
                 self.line_numOuterCycle.setText("4")
             elif index == 32:
                 self.checkBox_InnerMode.setChecked(False)
@@ -1546,6 +1613,7 @@ class StatusGUI(QtWidgets.QMainWindow):
 
         # Connect signals
         worker.log_signal.connect(self.print_log)
+        worker.status_signal.connect(self.show_status)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(worker.deleteLater)
@@ -1648,6 +1716,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 # Print system log
                 sysLogMsg = "[MAIN] Button clicked : START\t(Mode : " + self.cmb_modeSelection.currentText() + ")"
                 self.print_log(0, sysLogMsg)
+                self.update_test_setting()
 
                 # Process start
                 self.process_start()
@@ -1700,12 +1769,12 @@ class StatusGUI(QtWidgets.QMainWindow):
 
                 # Update current/remain cycle in GUI
                 if self.flag_preTest:
-                    self.line_currentPreCycle.setText(f"{self.crnt_pre_cycle}")
+                    self.line_currentPreCycle.setText("0")
                     self.line_remainPreCycle.setText(f"{self.num_pre_cycle}")
-                self.line_currentCycle.setText(f"{self.crnt_inner_cycle}")
+                self.line_currentCycle.setText("0")
                 self.line_remainCycle.setText(f"{self.num_inner_cycle}")
                 if not self.flag_innerCycle:
-                    self.line_currentOutCycle.setText(f"{self.crntOuterCycle}")
+                    self.line_currentOutCycle.setText("0")
                     self.line_remainOutCycle.setText(f"{self.numOuterCycle}")
                 
                 # Lock other functions
@@ -1718,7 +1787,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 oper_logger_filename = self.line_logFilePath.text() + '/' + self.line_logFileName.text() + '.log'
                 self.oper_log_handler = logging.handlers.RotatingFileHandler(filename=oper_logger_filename, mode='a', maxBytes=self.max_logFile_size)
                 self.oper_logger.addHandler(self.oper_log_handler)
-                self.oper_logger.debug("Data\tTime\tTx0\tTx1\tTx2\tTemperature")
+                # self.oper_logger.debug("Date\tTime\tTx0\tTx1\tTx2\tTemperature")
                 oper_formatter = logging.Formatter(fmt='%(asctime)s\t%(message)s')
                 self.oper_log_handler.setFormatter(oper_formatter)
 
@@ -1726,7 +1795,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 cri_logger_filename = self.line_logFilePath.text() + '/' + self.line_logFileName.text() + '_crit.log'
                 self.cri_log_handler = logging.handlers.RotatingFileHandler(filename=cri_logger_filename, mode='a', maxBytes=self.max_logFile_size)
                 self.cri_logger.addHandler(self.cri_log_handler)
-                self.cri_logger.debug("Data\tTime\tTx0\tTx1\tTx2\tTemperature")
+                # self.cri_logger.debug("Date\tTime\tTx0\tTx1\tTx2\tTemperature")
                 cri_formatter = logging.Formatter(fmt='%(asctime)s\t%(message)s')
                 self.cri_log_handler.setFormatter(cri_formatter)
         else:

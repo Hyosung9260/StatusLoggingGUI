@@ -348,9 +348,9 @@
        <widget class="QLineEdit" name="line_radar1">
         <property name="geometry">
          <rect>
-          <x>16</x>
+          <x>37</x>
           <y>24</y>
-          <width>131</width>
+          <width>91</width>
           <height>20</height>
          </rect>
         </property>
@@ -370,6 +370,22 @@
         </property>
         <property name="clearButtonEnabled">
          <bool>false</bool>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_actDeact1">
+        <property name="geometry">
+         <rect>
+          <x>7</x>
+          <y>14</y>
+          <width>21</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">image: url(:/etc/UI_IMG/Sleep.png);</string>
+        </property>
+        <property name="text">
+         <string/>
         </property>
        </widget>
       </widget>
@@ -720,9 +736,9 @@
        <widget class="QLineEdit" name="line_radar2">
         <property name="geometry">
          <rect>
-          <x>16</x>
+          <x>37</x>
           <y>24</y>
-          <width>131</width>
+          <width>91</width>
           <height>20</height>
          </rect>
         </property>
@@ -742,6 +758,22 @@
         </property>
         <property name="clearButtonEnabled">
          <bool>false</bool>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_actDeact2">
+        <property name="geometry">
+         <rect>
+          <x>7</x>
+          <y>14</y>
+          <width>21</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">image: url(:/etc/UI_IMG/Sleep.png);</string>
+        </property>
+        <property name="text">
+         <string/>
         </property>
        </widget>
       </widget>
@@ -1047,9 +1079,9 @@
        <widget class="QLineEdit" name="line_radar3">
         <property name="geometry">
          <rect>
-          <x>16</x>
+          <x>36</x>
           <y>24</y>
-          <width>131</width>
+          <width>91</width>
           <height>20</height>
          </rect>
         </property>
@@ -1069,6 +1101,22 @@
         </property>
         <property name="clearButtonEnabled">
          <bool>false</bool>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_actDeact3">
+        <property name="geometry">
+         <rect>
+          <x>7</x>
+          <y>14</y>
+          <width>21</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">image: url(:/etc/UI_IMG/Sleep.png);</string>
+        </property>
+        <property name="text">
+         <string/>
         </property>
        </widget>
       </widget>
@@ -1776,7 +1824,7 @@ border: None;</string>
        </font>
       </property>
       <property name="text">
-       <string>테스트모드</string>
+       <string>테스트 모드</string>
       </property>
      </widget>
      <widget class="QComboBox" name="cmb_modeSelection">
@@ -2441,7 +2489,7 @@ QPushButton:hover {
      </font>
     </property>
     <property name="title">
-     <string>테스트 모드 세팅</string>
+     <string>테스트 사이클 세팅</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>
@@ -2860,7 +2908,7 @@ QPushButton:hover {
           </font>
          </property>
          <property name="text">
-          <string>Pre wait Time</string>
+          <string>Pre Wait Time</string>
          </property>
         </widget>
        </item>
@@ -3469,7 +3517,7 @@ QPushButton:hover {
    <widget class="QGroupBox" name="groupBox">
     <property name="geometry">
      <rect>
-      <x>990</x>
+      <x>995</x>
       <y>450</y>
       <width>91</width>
       <height>161</height>
@@ -3604,6 +3652,9 @@ QPushButton:hover {
        <pointsize>8</pointsize>
       </font>
      </property>
+     <property name="contextMenuPolicy">
+      <enum>Qt::NoContextMenu</enum>
+     </property>
      <property name="styleSheet">
       <string notr="true">color: rgb(170, 0, 0);</string>
      </property>
@@ -3618,7 +3669,7 @@ QPushButton:hover {
       <x>510</x>
       <y>450</y>
       <width>481</width>
-      <height>171</height>
+      <height>163</height>
      </rect>
     </property>
     <property name="currentIndex">

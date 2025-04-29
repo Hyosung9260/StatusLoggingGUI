@@ -8,6 +8,12 @@ RL = 2
 RR = 3
 TG = 4
 
+IDLE        = 0
+MEASURING   = 1
+DEGRADED    = 2
+FAULT       = 3
+BLOCKAGE    = 4
+
 MAX_ERROR_COUNT     = 5
 CONFIRM_OFF_COUNT   = 10
 BITRATE             = "f_clock_mhz=40,nom_brp=1,nom_tseg1=63,nom_tseg2=16,nom_sjw=16,data_brp=2,data_tseg1=14,data_tseg2=5,data_sjw=4"

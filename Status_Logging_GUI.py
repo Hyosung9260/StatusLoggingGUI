@@ -16,14 +16,24 @@ from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QMessageBox, QFileDialog
 from PyQt5.QtCore import QTimer, QTime, QThread, Qt, pyqtSignal, QObject, QEventLoop, pyqtSlot
 
-update_date = "25.04.16"
-version = "Ver_1.0.1"
+# Only for developer mode (Ignore deprecation warning)
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+update_date = "25.04.29"
+version = "Ver_1.0.4"
 '''
-# NOTE Ver_1.0.1
-1. Radar가 act 상태일때만 data가 csv에 저장되도록 수정
-2. 우측 패널에 Act/Sleep에 따라 적색/녹색등으로 알아보기 쉽게 수정
+# NOTE Ver_1.0.4
+1. Data log 
+   > 테스트별로 분리되어 '테스트명_날짜_시간'으로 저장되도록 수정
+   > 센서 Deact 시 0이 저장되도록 수정
+   > 센서 Status가 함께 저장되도록 수정(IDLE, MEASURING 등)
+2. GUI 레이더 데이터 출력 부분에 센서 Status가 출력되도록 수정
+3. Tailgate 시험시 CAN ID가 0, 1, 2가 아닌 경우에도 정상 동작하도록 수정
+4. 자동모드에서 테스트사이클에 자동으로 값이 입력된 후 비워져있는 테스트 모드 클릭 시 값이 비워지지 않고 여전히 채워져 있는 문제 수정
 
 # TODO
+# NOTE :: DUE DATE : 05.07 전까지 전달
 * 프로그래머블 테스트모드 추가
 * 엑셀에서 테스트 모드 데이터 로드하는 방안 강구
 
@@ -101,17 +111,17 @@ class CANWriteWorker(QObject):
             self.write_RR_pre_request()
         
         # Tailgate test
-        elif dev_id in [0, 1, 2]:
+        elif dev_id in self.connected_dev_id:
             self.write_pwr_tmp_request(dev_id)
         
         elif dev_id == 444:
-            self.write_TG_pre_request(dev_id=0)
+            self.write_TG_pre_request(dev_id=self.connected_dev_id[0])
         
         elif dev_id == 555:
-            self.write_TG_pre_request(dev_id=1)
+            self.write_TG_pre_request(dev_id=self.connected_dev_id[1])
         
         elif dev_id == 666:
-            self.write_TG_pre_request(dev_id=2)
+            self.write_TG_pre_request(dev_id=self.connected_dev_id[2])
     
     def act_sequence(self):
         self.write_act_msg()
@@ -304,21 +314,21 @@ class CANWriteWorker(QObject):
             dlc = DOOR_ACT[0]
             msg_frame = DOOR_ACT[1]
 
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_FL, dlc, msg_frame)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame)
             if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
                 pass
             else:                           # Failed to write CAN message
                 self.log_signal.emit(0, f"[ERROR] message write : FL Act {error_ok}")
 
             QThread.msleep(50)
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_FR, dlc, msg_frame)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FR, dlc, msg_frame)
             if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
                 pass
             else:                           # Failed to write CAN message
                 self.log_signal.emit(0, "[ERROR] message write : FR Act")
 
             QThread.msleep(50)
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[0], msg_id_RR, dlc, msg_frame)
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_RR, dlc, msg_frame)
             if error_ok == PCAN_ERROR_OK:   # Successfully write CAN message
                 pass
             else:                           # Failed to write CAN message
@@ -380,9 +390,10 @@ class CANWriteWorker(QObject):
 # NOTE :: CANReadWorker
 class CANReadWorker(QObject):
     log_signal = pyqtSignal(int, str)                                # Signal for print log
-    status_signal = pyqtSignal(int)                                  # Signal for show radar signal
+    status_signal = pyqtSignal(int, int, bool)                       # Signal for show radar signal
     finished = pyqtSignal()                                          # Signal for worker finish
     update_data_signal = pyqtSignal(bool, int, str, str, str, str)   # Signal for update TxPower, Temperature
+    update_status_signal = pyqtSignal(int, int, int)                 # Signal for update radar status
     onOff_signal = pyqtSignal(bool)                                  # Signal for check radar on/off
     resend_signal = pyqtSignal(int)                                  # Signal for Act/Deact resend request
     stop_signal = pyqtSignal()                                       # Signal for worker stop
@@ -400,6 +411,10 @@ class CANReadWorker(QObject):
         self.flag_radar_act = False     # Realtime radar Act/Deact status
         self.flag_cmd_resend = False    # Main에서 요구한 상태와 Radar의 실제 상태가 달라 명령 재전송 필요 여부
         self.flag_deact = False
+        self.flag_status_update_FL = False
+        self.flag_status_update_FR = False
+        self.flag_status_update_RR = False
+        self.flag_status_update_TG = False
         self.send_count = 0
         self.ascii_data_tx0 = 0
         self.ascii_data_tx1 = 0
@@ -448,6 +463,8 @@ class CANReadWorker(QObject):
             # CAN message read
             msg_data, msg_id = self.pcan_ctrl.read_unit_buf(m_PCANHandle=self.pcan_handle, output_mode='numpy')
             event_loop.processEvents(QEventLoop.AllEvents, 50)
+            self.check_status_processing(msg_id, msg_data)
+
             # Main request ACT
             if self.flag_act:
                 if msg_id:
@@ -495,15 +512,95 @@ class CANReadWorker(QObject):
                         self.flag_deact_once = True
                         self.count_FL_pre_request = 0
                         if self.flag_door_test:
-                            self.status_signal.emit(FL, False)
-                            self.status_signal.emit(FR, False)
-                            self.status_signal.emit(RR, False)
+                            self.status_signal.emit(FL, self.dev_id, False)
+                            self.status_signal.emit(FR, self.dev_id, False)
+                            self.status_signal.emit(RR, self.dev_id, False)
                         else:
-                            self.status_signal.emit(TG, False)
+                            self.status_signal.emit(TG, self.dev_id, False)
                     else:
                         pass
 
         self.finished.emit()
+
+    def check_status_processing(self, msg_id, msg_data):
+        if self.flag_door_test:
+            if msg_id == 0x04000000 and not self.flag_status_update_FL:
+                if msg_data[3] == 0:
+                    self.flag_status_update_FL = True
+                    status = IDLE
+                elif msg_data[3] == 1:
+                    self.flag_status_update_FL = True
+                    status = MEASURING
+                elif msg_data[3] == 2:
+                    self.flag_status_update_FL = True
+                    status = DEGRADED
+                elif msg_data[3] == 3:
+                    self.flag_status_update_FL = True
+                    status = FAULT
+                elif msg_data[3] == 4:
+                    self.flag_status_update_FL = True
+                    status = BLOCKAGE
+                else:
+                    pass
+                self.update_status_signal.emit(FL, 99, status)
+            elif msg_id == 0x04000002 and not self.flag_status_update_FR:
+                if msg_data[3] == 0:
+                    self.flag_status_update_FR = True
+                    status = IDLE
+                elif msg_data[3] == 1:
+                    self.flag_status_update_FR = True
+                    status = MEASURING
+                elif msg_data[3] == 2:
+                    self.flag_status_update_FR = True
+                    status = DEGRADED
+                elif msg_data[3] == 3:
+                    self.flag_status_update_FR = True
+                    status = FAULT
+                elif msg_data[3] == 4:
+                    self.flag_status_update_FR = True
+                    status = BLOCKAGE
+                else:
+                    pass
+                self.update_status_signal.emit(FR, 99, status)
+            elif msg_id == 0x04000006 and not self.flag_status_update_RR:
+                if msg_data[3] == 0:
+                    self.flag_status_update_RR = True
+                    status = IDLE
+                elif msg_data[3] == 1:
+                    self.flag_status_update_RR = True
+                    status = MEASURING
+                elif msg_data[3] == 2:
+                    self.flag_status_update_RR = True
+                    status = DEGRADED
+                elif msg_data[3] == 3:
+                    self.flag_status_update_RR = True
+                    status = FAULT
+                elif msg_data[3] == 4:
+                    self.flag_status_update_RR = True
+                    status = BLOCKAGE
+                else:
+                    pass
+                self.update_status_signal.emit(RR, 99, status)
+        else:   # Tailgate test
+            if msg_id == 0x17C5F801:
+                if msg_data[3] == 0:
+                    self.flag_status_update_TG = True
+                    status = IDLE
+                elif msg_data[3] == 1:
+                    self.flag_status_update_TG = True
+                    status = MEASURING
+                elif msg_data[3] == 2:
+                    self.flag_status_update_TG = True
+                    status = DEGRADED
+                elif msg_data[3] == 3:
+                    self.flag_status_update_TG = True
+                    status = FAULT
+                elif msg_data[3] == 4:
+                    self.flag_status_update_TG = True
+                    status = BLOCKAGE
+                else:
+                    pass
+                self.update_status_signal.emit(TG, self.dev_id, status)
 
     def data_processing(self, msg_id, msg_data):
         if self.flag_door_test:
@@ -528,7 +625,7 @@ class CANReadWorker(QObject):
             elif data_code == "Temp":
                 self.ascii_data_temp = result
             self.update_data_signal.emit(self.flag_door_test, 0, str(self.ascii_data_tx0), str(self.ascii_data_tx1), str(self.ascii_data_tx2), str(self.ascii_data_temp))
-            self.status_signal.emit(FL, True)
+            self.status_signal.emit(FL, self.dev_id, True)
         # FR
         elif msg_id == 0x1FF100A3:
             if not self.flag_FR_on:
@@ -545,7 +642,7 @@ class CANReadWorker(QObject):
             elif data_code == "Temp":
                 self.ascii_data_temp_r2 = result
             self.update_data_signal.emit(self.flag_door_test, 1, str(self.ascii_data_tx0_r2), str(self.ascii_data_tx1_r2), str(self.ascii_data_tx2_r2), str(self.ascii_data_temp_r2))
-            self.status_signal.emit(FR, True)
+            self.status_signal.emit(FR, self.dev_id, True)
         # RL (Not used in this test)
         elif msg_id == 0x1FF100A4:
             data_code, result = self.get_txpower_temp(msg_id, msg_data)
@@ -566,8 +663,7 @@ class CANReadWorker(QObject):
             elif data_code == "Temp":
                 self.ascii_data_temp_r3 = result
             self.update_data_signal.emit(self.flag_door_test, 2, str(self.ascii_data_tx0_r3), str(self.ascii_data_tx1_r3), str(self.ascii_data_tx2_r3), str(self.ascii_data_temp_r3))
-            self.status_signal.emit(RR, True)
-        # Error (msg_id == 999)
+            self.status_signal.emit(RR, self.dev_id, True)
         else:
             pass
     def tailgate_data_processing(self, msg_id, msg_data):
@@ -586,8 +682,7 @@ class CANReadWorker(QObject):
             elif data_code == "Temp":
                 self.ascii_data_temp = result
             self.update_data_signal.emit(self.flag_door_test, self.dev_id, str(self.ascii_data_tx0), str(self.ascii_data_tx1), str(self.ascii_data_tx2), str(self.ascii_data_temp))
-            self.status_signal.emit(TG, True)
-        # Error (msg_id == 999)
+            self.status_signal.emit(TG, self.dev_id, True)        
         else:
             pass
 
@@ -682,24 +777,27 @@ class CANReadWorker(QObject):
             data_code = "etc"
             result = 0
             return data_code, result
-
         
     def control_act_deact(self, onOffStatus):
         # self.log_signal.emit(0, f"[THREAD_READ] On/Off Signal recieved : {onOffStatus}")
-
         if onOffStatus: # ON
             self.flag_act = True
         else:           # OFF
             self.flag_act = False
 
     def resend_request(self):
+        self.flag_status_update_FL = False
+        self.flag_status_update_FR = False
+        self.flag_status_update_RR = False
+        self.flag_status_update_TG = False
+
         if self.flag_act:
             if self.flag_door_test:
                 if not self.flag_FL_on:
-                    self.count_FL_pre_request += 1
-                elif not self.flag_FR_on:
+                    self.count_FL_pre_request += 1                    
+                if not self.flag_FR_on:
                     self.count_FR_pre_request += 1
-                elif not self.flag_RR_on:
+                if not self.flag_RR_on:
                     self.count_RR_pre_request += 1
             else:   # Tailgate test
                 if not self.flag_TG_on:
@@ -710,34 +808,40 @@ class CANReadWorker(QObject):
                 self.flag_FR_on = False
                 self.flag_RR_on = False
             else:   # Tailgate test
-                self.flag_TG_on = False
+                self.flag_TG_on = False                
 
             if self.flag_door_test:
                 if self.count_FL_pre_request > 2:
                     # self.log_signal.emit(0, "[READ] FL pre resend request")
                     self.resend_signal.emit(111)
                     self.count_FL_pre_request = 0
+                    self.status_signal.emit(FL, self.dev_id, False)
                 elif self.count_FR_pre_request > 2:
                     # self.log_signal.emit(0, "[READ] FR pre resend request")
                     self.resend_signal.emit(222)
                     self.count_FR_pre_request = 0
+                    self.status_signal.emit(FR, self.dev_id, False)
                 elif self.count_RR_pre_request > 2:
                     # self.log_signal.emit(0, "[READ] RR pre resend request")
                     self.resend_signal.emit(333)
                     self.count_RR_pre_request = 0
+                    self.status_signal.emit(RR, self.dev_id, False)
             else:   # Tailgate test
                 if self.count_TG_pre_request > 2 and self.dev_id == 0:
                     # self.log_signal.emit(0, f"[READ] TG#1 pre resend request")
                     self.resend_signal.emit(444)
                     self.count_TG_pre_request = 0
+                    self.status_signal.emit(TG, self.dev_id, False)
                 elif self.count_TG_pre_request > 2 and self.dev_id == 1:
                     # self.log_signal.emit(0, f"[READ] TG#2 pre resend request")
                     self.resend_signal.emit(555)
                     self.count_TG_pre_request = 0
+                    self.status_signal.emit(TG, self.dev_id, False)
                 elif self.count_TG_pre_request > 2 and self.dev_id == 2:
                     # self.log_signal.emit(0, f"[READ] TG#3 pre resend request")
                     self.resend_signal.emit(666)
                     self.count_TG_pre_request = 0
+                    self.status_signal.emit(TG, self.dev_id, False)
         
         # else:   # Deact
         #     if self.flag_cmd_resend:
@@ -838,6 +942,12 @@ class StatusGUI(QtWidgets.QMainWindow):
         self.total_time_pre = 0
         self.total_time_inner = 0
         self.total_time_outer = 0
+        self.status_FL = None
+        self.status_FR = None
+        self.status_RR = None
+        self.status_TG1 = None
+        self.status_TG2 = None
+        self.status_TG3 = None
         self.max_logFile_size = 10*1024*1024
 
         # Initial font setting
@@ -846,6 +956,21 @@ class StatusGUI(QtWidgets.QMainWindow):
         
         # Initialize status
         self.lab_timer.hide()
+        self.label_r1_status0.hide()
+        self.label_r1_status1.hide()
+        self.label_r1_status2.hide()
+        self.label_r1_status3.hide()
+        self.label_r1_status4.hide()
+        self.label_r2_status0.hide()
+        self.label_r2_status1.hide()
+        self.label_r2_status2.hide()
+        self.label_r2_status3.hide()
+        self.label_r2_status4.hide()
+        self.label_r3_status0.hide()
+        self.label_r3_status1.hide()
+        self.label_r3_status2.hide()
+        self.label_r3_status3.hide()
+        self.label_r3_status4.hide()
         self.lab_timer.setAlignment(Qt.AlignCenter)
         self.btn_stop.setEnabled(False)
         self.btn_unlock.setEnabled(False)
@@ -929,7 +1054,7 @@ class StatusGUI(QtWidgets.QMainWindow):
 
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre1)
             error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre2)
-            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre3)            
+            error_ok = self.pcan_ctrl.write_msg_frame(self.pcan_handle_dict[self.connected_dev_id[0]], msg_id_FL, dlc, msg_frame_pre3)
             if error_ok == PCAN_ERROR_OK:
                 self.print_log(0, "[MAIN] Button clicked : FL power, temp request")
             else:
@@ -1042,22 +1167,32 @@ class StatusGUI(QtWidgets.QMainWindow):
         
     def save_csv_data(self):
         current_time = QTime.currentTime().toString("hh:mm:ss")
-        r1_tx0 = self.get_label_value(self.lab_Rdr1_txPwr1)
-        r1_tx1 = self.get_label_value(self.lab_Rdr1_txPwr2)
-        r1_tx2 = self.get_label_value(self.lab_Rdr1_txPwr2)
-        r1_temp = self.get_label_value(self.lab_Rdr1_tmp)
-        r2_tx0 = self.get_label_value(self.lab_Rdr2_txPwr1)
-        r2_tx1 = self.get_label_value(self.lab_Rdr2_txPwr2)
-        r2_tx2 = self.get_label_value(self.lab_Rdr2_txPwr3)
-        r2_temp = self.get_label_value(self.lab_Rdr2_tmp)
-        r3_tx0 = self.get_label_value(self.lab_Rdr3_txPwr1)
-        r3_tx1 = self.get_label_value(self.lab_Rdr3_txPwr2)
-        r3_tx2 = self.get_label_value(self.lab_Rdr3_txPwr3)
-        r3_temp = self.get_label_value(self.lab_Rdr3_tmp)
+        if self.flag_on:
+            r1_tx0 = self.get_label_value(self.lab_Rdr1_txPwr1)
+            r1_tx1 = self.get_label_value(self.lab_Rdr1_txPwr2)
+            r1_tx2 = self.get_label_value(self.lab_Rdr1_txPwr2)
+            r1_temp = self.get_label_value(self.lab_Rdr1_tmp)
+            r2_tx0 = self.get_label_value(self.lab_Rdr2_txPwr1)
+            r2_tx1 = self.get_label_value(self.lab_Rdr2_txPwr2)
+            r2_tx2 = self.get_label_value(self.lab_Rdr2_txPwr3)
+            r2_temp = self.get_label_value(self.lab_Rdr2_tmp)
+            r3_tx0 = self.get_label_value(self.lab_Rdr3_txPwr1)
+            r3_tx1 = self.get_label_value(self.lab_Rdr3_txPwr2)
+            r3_tx2 = self.get_label_value(self.lab_Rdr3_txPwr3)
+            r3_temp = self.get_label_value(self.lab_Rdr3_tmp)
 
-        r1_row = [current_time, r1_tx0, r1_tx1, r1_tx2, r1_temp]
-        r2_row = [current_time, r2_tx0, r2_tx1, r2_tx2, r2_temp]
-        r3_row = [current_time, r3_tx0, r3_tx1, r3_tx2, r3_temp]
+            if self.flag_door_test:
+                r1_row = [current_time, r1_tx0, r1_tx1, r1_tx2, r1_temp, self.status_FL]
+                r2_row = [current_time, r2_tx0, r2_tx1, r2_tx2, r2_temp, self.status_FR]
+                r3_row = [current_time, r3_tx0, r3_tx1, r3_tx2, r3_temp, self.status_RR]
+            else:   # Tailgate test
+                r1_row = [current_time, r1_tx0, r1_tx1, r1_tx2, r1_temp, self.status_TG1]
+                r2_row = [current_time, r2_tx0, r2_tx1, r2_tx2, r2_temp, self.status_TG2]
+                r3_row = [current_time, r3_tx0, r3_tx1, r3_tx2, r3_temp, self.status_TG3]
+        else:
+            r1_row = [current_time, 0, 0, 0, 0, "IDLE"]
+            r2_row = [current_time, 0, 0, 0, 0, "IDLE"]
+            r3_row = [current_time, 0, 0, 0, 0, "IDLE"]
 
         with open(self.Radar1_data_csv_path, "a", newline='', encoding='utf-8-sig') as f:
             writer = csv.writer(f)
@@ -1169,9 +1304,9 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.inner_cycle_work()
         else:
             if self.outer_cycle_timer < self.outerOffTime - 1:
-                self.outer_cycle_timer += 1
                 self.line_remainTime.setText(f"{self.outerOffTime - self.outer_cycle_timer}")
                 self.line_currentMode.setText("OutOff")
+                self.outer_cycle_timer += 1
             else:
                 self.outer_cycle_timer = 0
                 self.crntOuterCycle += 1
@@ -1221,8 +1356,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.progressBar.setValue(progressVal)
             self.update_operation_display()
             self.cycle_counter()
-            if self.flag_on:
-                self.save_csv_data()
+            self.save_csv_data()
 
         date = datetime.datetime.now()
         crnt_date = (f'{date.year}년 {date.month}월 {date.day}일')
@@ -1276,7 +1410,7 @@ class StatusGUI(QtWidgets.QMainWindow):
             mins = (self.total_time_inner % 3600) // 60
             secs = self.total_time_inner % 60
             self.line_totalTestTime.setText(f"{hours}시간 {mins}분 {secs}초")
-
+            
             self.totalTestTime = self.total_time_inner
         
         except ValueError:
@@ -1287,7 +1421,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.outerOffTime = int(self.line_outerOffTime.text()) if self.line_outerOffTime.text().isdigit() else 0
                 self.numOuterCycle = int(self.line_numOuterCycle.text()) if self.line_numOuterCycle.text().isdigit() else 0
 
-                self.total_time_outer = (self.total_time_inner + self.outerOffTime) * self.numOuterCycle
+                self.total_time_outer = ((self.inner_on_time + self.inner_off_time) * self.num_inner_cycle + self.outerOffTime) * self.numOuterCycle
                 self.line_totalOuterCycleTime.setText(str(self.total_time_outer))
 
                 if self.flag_preTest:
@@ -1299,6 +1433,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.line_totalTestTime.setText(f"{hours}시간 {mins}분 {secs}초")
 
                 self.totalTestTime = self.total_time_outer
+
             except ValueError:
                 self.line_totalOuterCycleTime.setText("0")
 
@@ -1411,8 +1546,8 @@ class StatusGUI(QtWidgets.QMainWindow):
         if self.btn_device2.isChecked():    # Connect
             retVal = self.connect_can_dev(dev_id, 2)
             if retVal:  # Succeed
-                    self.spinBox_devID2.setEnabled(False)
-                    self.pcan_handle_dict[dev_id] = 0
+                self.spinBox_devID2.setEnabled(False)
+                self.pcan_handle_dict[dev_id] = 0
             else:       # Failed
                 self.btn_device2.toggle()
         else:                               # Disconnect
@@ -1440,30 +1575,46 @@ class StatusGUI(QtWidgets.QMainWindow):
             else:       # Failed
                 self.btn_device3.toggle()
 
-    @pyqtSlot(int, bool)
-    def show_status(self, sensorType, status):
-        if status:
-            if sensorType == FL:
-                self.label_actDeact1.setStyleSheet(activate)
-            elif sensorType == FR:
-                self.label_actDeact1.setStyleSheet(activate)
-            elif sensorType == RR:
-                self.label_actDeact1.setStyleSheet(activate)
-            elif sensorType == TG:
-                self.label_actDeact1.setStyleSheet(activate)
+    @pyqtSlot(int, int, bool)
+    def show_status(self, sensorType, dev_id, status):
+        if self.flag_door_test:
+            if status:
+                if sensorType == FL:
+                    self.label_actDeact1.setStyleSheet(activate)
+                elif sensorType == FR:
+                    self.label_actDeact2.setStyleSheet(activate)
+                elif sensorType == RR:
+                    self.label_actDeact3.setStyleSheet(activate)
+                else:
+                    pass
             else:
-                pass
-        else:
-            if sensorType == FL:
-                self.label_actDeact1.setStyleSheet(sleep)
-            elif sensorType == FR:
-                self.label_actDeact1.setStyleSheet(sleep)
-            elif sensorType == RR:
-                self.label_actDeact1.setStyleSheet(sleep)
-            elif sensorType == TG:
-                self.label_actDeact1.setStyleSheet(sleep)
+                if sensorType == FL:
+                    self.label_actDeact1.setStyleSheet(sleep)
+                elif sensorType == FR:
+                    self.label_actDeact2.setStyleSheet(sleep)
+                elif sensorType == RR:
+                    self.label_actDeact3.setStyleSheet(sleep)
+                else:
+                    pass
+        else:   # Tailgate test
+            if status:
+                if dev_id == 0:
+                    self.label_actDeact1.setStyleSheet(activate)
+                elif dev_id == 1:
+                    self.label_actDeact2.setStyleSheet(activate)
+                elif dev_id == 2:
+                    self.label_actDeact3.setStyleSheet(activate)
+                else:
+                    pass
             else:
-                pass
+                if dev_id == 0:
+                    self.label_actDeact1.setStyleSheet(sleep)
+                elif dev_id == 1:
+                    self.label_actDeact2.setStyleSheet(sleep)
+                elif dev_id == 2:
+                    self.label_actDeact3.setStyleSheet(sleep)
+                else:
+                    pass
 
 
     def print_log(self, category, message):
@@ -1515,7 +1666,6 @@ class StatusGUI(QtWidgets.QMainWindow):
         select_date = date.strftime("%y.%m.%d")
         select_time = QTime.currentTime().toString("hh.mm.ss")
         self.line_logFileName.setText(self.cmb_modeSelection.currentText() + f"_{select_date}_{select_time}")
-        print(index)
 
         if not self.manualMode:
             if index == 15:
@@ -1584,6 +1734,16 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.line_numInnerCycle.setText("2880")
                 self.line_outerOffTime.setText("28800")
                 self.line_numOuterCycle.setText("10")
+            else:
+                self.line_preOnTime.setText("")
+                self.line_preOffTime.setText("")
+                self.line_numPreCycle.setText("")
+                self.line_preWaitTime.setText("")
+                self.line_innerOnTime.setText("")
+                self.line_innerOffTime.setText("")
+                self.line_numInnerCycle.setText("")
+                self.line_outerOffTime.setText("")
+                self.line_numOuterCycle.setText("")
 
     def func_clearFileName(self):
         self.line_logFileName.setText("")
@@ -1623,6 +1783,7 @@ class StatusGUI(QtWidgets.QMainWindow):
 
         # Function for CAN read data update
         worker.update_data_signal.connect(self.update_data)
+        worker.update_status_signal.connect(self.update_status)
         
         # Call run when thread is started
         thread.started.connect(worker.run)
@@ -1670,6 +1831,242 @@ class StatusGUI(QtWidgets.QMainWindow):
                 sysLogMsg = "Dev_id is not matched with any Radar_id"
                 self.print_log(0, sysLogMsg)
 
+    @pyqtSlot(int, int, int)
+    def update_status(self, sensorType, devID, status):
+        if sensorType == FL:
+            if status == IDLE:
+                self.status_FL = "IDLE"
+                self.label_r1_status0.show()
+                self.label_r1_status1.hide()
+                self.label_r1_status2.hide()
+                self.label_r1_status3.hide()
+                self.label_r1_status4.hide()
+            elif status == MEASURING:
+                self.status_FL = "MEASURING"
+                self.label_r1_status0.hide()
+                self.label_r1_status1.show()
+                self.label_r1_status2.hide()
+                self.label_r1_status3.hide()
+                self.label_r1_status4.hide()
+            elif status == DEGRADED:
+                self.status_FL = "DEGRADED"
+                self.label_r1_status0.hide()
+                self.label_r1_status1.hide()
+                self.label_r1_status2.show()
+                self.label_r1_status3.hide()
+                self.label_r1_status4.hide()
+            elif status == FAULT:
+                self.status_FL = "FAULT"
+                self.label_r1_status0.hide()
+                self.label_r1_status1.hide()
+                self.label_r1_status2.hide()
+                self.label_r1_status3.show()
+                self.label_r1_status4.hide()
+            elif status == BLOCKAGE:
+                self.status_FL = "BLOCKAGE"
+                self.label_r1_status0.hide()
+                self.label_r1_status1.hide()
+                self.label_r1_status2.hide()
+                self.label_r1_status3.hide()
+                self.label_r1_status4.show()
+            else:
+                pass
+        elif sensorType == FR:
+            if status == IDLE:
+                self.status_FR = "IDLE"
+                self.label_r2_status0.show()
+                self.label_r2_status1.hide()
+                self.label_r2_status2.hide()
+                self.label_r2_status3.hide()
+                self.label_r2_status4.hide()
+            elif status == MEASURING:
+                self.status_FR = "MEASURING"
+                self.label_r2_status0.hide()
+                self.label_r2_status1.show()
+                self.label_r2_status2.hide()
+                self.label_r2_status3.hide()
+                self.label_r2_status4.hide()
+            elif status == DEGRADED:
+                self.status_FR = "DEGRADED"
+                self.label_r2_status0.hide()
+                self.label_r2_status1.hide()
+                self.label_r2_status2.show()
+                self.label_r2_status3.hide()
+                self.label_r2_status4.hide()
+            elif status == FAULT:
+                self.status_FR = "FAULT"
+                self.label_r2_status0.hide()
+                self.label_r2_status1.hide()
+                self.label_r2_status2.hide()
+                self.label_r2_status3.show()
+                self.label_r2_status4.hide()
+            elif status == BLOCKAGE:
+                self.status_FR = "BLOCKAGE"
+                self.label_r2_status0.hide()
+                self.label_r2_status1.hide()
+                self.label_r2_status2.hide()
+                self.label_r2_status3.hide()
+                self.label_r2_status4.show()
+            else:
+                pass
+        elif sensorType == RR:
+            if status == IDLE:
+                self.status_RR = "IDLE"
+                self.label_r3_status0.show()
+                self.label_r3_status1.hide()
+                self.label_r3_status2.hide()
+                self.label_r3_status3.hide()
+                self.label_r3_status4.hide()
+            elif status == MEASURING:
+                self.status_RR = "MEASURING"
+                self.label_r3_status0.hide()
+                self.label_r3_status1.show()
+                self.label_r3_status2.hide()
+                self.label_r3_status3.hide()
+                self.label_r3_status4.hide()
+            elif status == DEGRADED:
+                self.status_RR = "DEGRADED"
+                self.label_r3_status0.hide()
+                self.label_r3_status1.hide()
+                self.label_r3_status2.show()
+                self.label_r3_status3.hide()
+                self.label_r3_status4.hide()
+            elif status == FAULT:
+                self.status_RR = "FAULT"
+                self.label_r3_status0.hide()
+                self.label_r3_status1.hide()
+                self.label_r3_status2.hide()
+                self.label_r3_status3.show()
+                self.label_r3_status4.hide()
+            elif status == BLOCKAGE:
+                self.status_RR = "BLOCKAGE"
+                self.label_r3_status0.hide()
+                self.label_r3_status1.hide()
+                self.label_r3_status2.hide()
+                self.label_r3_status3.hide()
+                self.label_r3_status4.show()
+            else:
+                pass
+        elif sensorType == TG:
+            if self.connected_dev_id[0] == devID:
+                if status == IDLE:
+                    self.status_TG1 = "IDLE"
+                    self.label_r1_status0.show()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.hide()
+                elif status == MEASURING:
+                    self.status_TG1 = "MEASURING"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.show()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.hide()
+                elif status == DEGRADED:
+                    self.status_TG1 = "DEGRADED"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.show()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.hide()
+                elif status == FAULT:
+                    self.status_TG1 = "FAULT"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.show()
+                    self.label_r1_status4.hide()
+                elif status == BLOCKAGE:
+                    self.status_TG1 = "BLOCKAGE"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.show()
+                else:
+                    pass
+            elif self.connected_dev_id[1] == devID:
+                if status == IDLE:
+                    self.status_TG2 = "IDLE"
+                    self.label_r1_status0.show()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.hide()
+                elif status == MEASURING:
+                    self.status_TG2 = "IDLE"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.show()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.hide()
+                elif status == DEGRADED:
+                    self.status_TG2 = "IDLE"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.show()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.hide()
+                elif status == FAULT:
+                    self.status_TG2 = "IDLE"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.show()
+                    self.label_r1_status4.hide()
+                elif status == BLOCKAGE:
+                    self.status_TG2 = "IDLE"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.show()
+                else:
+                    pass
+            elif self.connected_dev_id[2] == devID:
+                if status == IDLE:
+                    self.status_TG3 = "IDLE"
+                    self.label_r1_status0.show()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.hide()
+                elif status == MEASURING:
+                    self.status_TG3 = "MEASURING"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.show()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.hide()
+                elif status == DEGRADED:
+                    self.status_TG3 = "DEGRADED"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.show()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.hide()
+                elif status == FAULT:
+                    self.status_TG3 = "FAULT"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.show()
+                    self.label_r1_status4.hide()
+                elif status == BLOCKAGE:
+                    self.status_TG3 = "BLOCKAGE"
+                    self.label_r1_status0.hide()
+                    self.label_r1_status1.hide()
+                    self.label_r1_status2.hide()
+                    self.label_r1_status3.hide()
+                    self.label_r1_status4.show()
+                else:
+                    pass
+            else:
+                pass
+        else:
+            pass
+
     def write_can_thread(self, connected_dev_id, pcan_handle_dict):
         # Generate QThread and Worker
         thread = QThread()
@@ -1700,7 +2097,7 @@ class StatusGUI(QtWidgets.QMainWindow):
             _, pcan_handle = self.pcan_ctrl.get_handle_from_id(dev_id)
             self.pcan_handle_dict[dev_id] = pcan_handle
             self.read_can_thread(dev_id, pcan_handle)
-        
+
         # Generate CAN write thread
         self.write_can_thread(self.connected_dev_id, self.pcan_handle_dict)
         
@@ -1723,26 +2120,26 @@ class StatusGUI(QtWidgets.QMainWindow):
 
                 # Generate initial csv file
                 if self.flag_door_test:
-                    self.Radar1_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "FL.csv")
-                    self.Radar2_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "FR.csv")
-                    self.Radar3_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "RR.csv")
+                    self.Radar1_data_csv_path = os.path.join(self.data_logfolder_path, self.line_logFileName.text() + "_FL.csv")
+                    self.Radar2_data_csv_path = os.path.join(self.data_logfolder_path, self.line_logFileName.text() + "_FR.csv")
+                    self.Radar3_data_csv_path = os.path.join(self.data_logfolder_path, self.line_logFileName.text() + "_RR.csv")
                 else:   # Tailgate test
-                    self.Radar1_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "TG#1.csv")
-                    self.Radar2_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "TG#2.csv")
-                    self.Radar3_data_csv_path = os.path.join(self.data_logfolder_path, self.select_date + "TG#3.csv")
+                    self.Radar1_data_csv_path = os.path.join(self.data_logfolder_path, self.line_logFileName.text() + "_TG#1.csv")
+                    self.Radar2_data_csv_path = os.path.join(self.data_logfolder_path, self.line_logFileName.text() + "_TG#2.csv")
+                    self.Radar3_data_csv_path = os.path.join(self.data_logfolder_path, self.line_logFileName.text() + "_TG#3.csv")
 
                 if not os.path.exists(self.Radar1_data_csv_path):
                     with open(self.Radar1_data_csv_path, "a", newline='', encoding='utf-8-sig') as f:
                         writer = csv.writer(f)
-                        writer.writerow(["Time", "Tx0", "Tx1", "Tx2", "Temperature"])
+                        writer.writerow(["Time", "Tx0", "Tx1", "Tx2", "Temp", "Status"])
                 if not os.path.exists(self.Radar2_data_csv_path):
                     with open(self.Radar2_data_csv_path, "a", newline='', encoding='utf-8-sig') as f:
                         writer = csv.writer(f)
-                        writer.writerow(["Time", "Tx0", "Tx1", "Tx2", "Temperature"])
+                        writer.writerow(["Time", "Tx0", "Tx1", "Tx2", "Temp", "Status"])
                 if not os.path.exists(self.Radar3_data_csv_path):
                     with open(self.Radar3_data_csv_path, "a", newline='', encoding='utf-8-sig') as f:
                         writer = csv.writer(f)
-                        writer.writerow(["Time", "Tx0", "Tx1", "Tx2", "Temperature"])
+                        writer.writerow(["Time", "Tx0", "Tx1", "Tx2", "Temp", "Status"])
 
                 # Send ON signal
                 if self.flag_preTest and self.pre_on_time == 0:
@@ -1781,7 +2178,7 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.group_modeSelection.setEnabled(False)
                 self.group_canConnect.setEnabled(False)
                 self.group_logConfig.setEnabled(False)
-                self.group_customModeSetting.setEnabled(False)            
+                self.group_customModeSetting.setEnabled(False)
                 
                 # Save operation log
                 oper_logger_filename = self.line_logFilePath.text() + '/' + self.line_logFileName.text() + '.log'
@@ -1820,6 +2217,9 @@ class StatusGUI(QtWidgets.QMainWindow):
                 self.flag_pre_test_finished = False
                 self.operation_timer = 0
                 self.lab_timer.setText("0000:00:00")
+                self.label_actDeact1.setStyleSheet(sleep)
+                self.label_actDeact2.setStyleSheet(sleep)
+                self.label_actDeact3.setStyleSheet(sleep)
 
                 # Unlock other functions
                 self.group_modeSelection.setEnabled(True)
@@ -1844,8 +2244,25 @@ class StatusGUI(QtWidgets.QMainWindow):
                     thread.quit()
                     thread.wait()
 
+                self.label_r1_status0.hide()
+                self.label_r1_status1.hide()
+                self.label_r1_status2.hide()
+                self.label_r1_status3.hide()
+                self.label_r1_status4.hide()
+                self.label_r2_status0.hide()
+                self.label_r2_status1.hide()
+                self.label_r2_status2.hide()
+                self.label_r2_status3.hide()
+                self.label_r2_status4.hide()
+                self.label_r3_status0.hide()
+                self.label_r3_status1.hide()
+                self.label_r3_status2.hide()
+                self.label_r3_status3.hide()
+                self.label_r3_status4.hide()
+
                 # Remove logger handler
                 self.oper_logger.removeHandler(self.oper_log_handler)
+                self.cri_logger.removeHandler(self.cri_log_handler)
 
         elif self.flag_start and self.flag_test_finished:
             # Print and save system log
